@@ -1,0 +1,68 @@
+menu "BlinkStatus"
+    config BLINK_STATUS_DIN_GPIO
+        int "The GPIO which RGB LED connected"
+        range 0 48
+        default 48
+        help
+            ESP32-S3-DevKitC-1 connect DIN of SK68xx to GPIO48
+            22~25 not available
+            26~37 for SPI flash and PSRAM, not recommended for using
+
+    config BLINK_STATUS_RMT_CH
+        int "RMT TX default channel for sending data to SK68xx"
+        range 0 3
+        default 2
+        help
+            Which RMT TX channel is used for sending data
+    
+    choice BLINK_STATUS_TIMER
+        prompt "The timer for blinking"
+        default BLINK_STATUS_TIMER_ESP
+
+        config BLINK_STATUS_TIMER_ESP
+            bool "ESP High Resolution Timer"
+        config BLINK_STATUS_TIMER_GPT
+            bool "General Purpose Timer"
+    endchoice
+
+    config BLINK_STATUS_TIMER_GPT_GROUP
+        int "The group of general purpose timer"
+        default 0
+        range 0 1
+        help
+            Which general purpose timer is used for blinking
+    
+    config BLINK_STATUS_TIMER_GPT_INDEX
+        int "The index of general purpose timer"
+        default 0
+        range 0 1
+        help
+            Which general purpose timer is used for blinking
+
+    choice BLINK_STATUS_TIMER_GPT_CLK_SRC
+        prompt "The clock source for general purpose timer"
+        depends on BLINK_STATUS_TIMER_GPT
+        default BLINK_STATUS_CLK_SRC_XTAL
+        help
+            Choose for timer's clock source
+
+        config BLINK_STATUS_TIMER_GPT_CLK_SRC_APB
+            bool "APB[80MHz|CPU_CLK]"
+        config BLINK_STATUS_TIMER_GPT_CLK_SRC_XTAL
+            bool "XTAL[40MHz]"
+    endchoice
+
+    config BLINK_STATUS_TIMER_GPT_CLK_SRC
+        int
+        default 0 if BLINK_STATUS_CLK_SRC_APB
+        default 1 if BLINK_STATUS_CLK_SRC_XTAL
+
+    config BLINK_STATUS_TIMER_GPT_DIVIDER
+        int "The divider for general purpose timer"
+        depends on BLINK_STATUS_TIMER_GPT
+        range 2 65536
+        default 40000
+        help
+            Clock divider
+    
+endmenu
