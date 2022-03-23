@@ -1,38 +1,36 @@
-menu "AceBearXP"
-    menu "SK68xx"
-        config SK68XX_T0HI_NANO_SECONDS
-            int "Bit 0 code, high level time, in nano seconds"
-            range 200 400
-            default 350
-            help
-                The standard value is 320, should >=200 and <= 400
-        
-        config SK68XX_T0LO_NANO_SECONDS
-            int "Bit 0 code, low level time, in nano seconds"
-            range 800 2000
-            default 1000
-            help
-                should >= 800
-        
-        config SK68XX_T1HI_NANO_SECONDS
-            int "Bit 1 code, high level time, in nano seconds"
-            range 620 1000
-            default 1000
-            help
-                The standard value is 640, should >=620 and <= 1000
-        
-        config SK68XX_T1LO_NANO_SECONDS
-            int "Bit 1 code, low level time, in nano seconds"
-            range 200 2000
-            default 350
-            help
-                should >= 200
-        
-        config SK68XX_TRST_NANO_SECONDS
-            int "Reset code , low level time, in nano seconds"
-            range 8000 80000
-            default 10000
-            help
-                should >= 8000
-    endmenu
+menu "SK68xx"
+    config SK68XX_T0HI_NANO_SECONDS
+        int "Bit 0 code, high level time, in nano seconds"
+        range 200 400
+        default 350
+        help
+            The standard value is 320, should >=200 and <= 400
+    
+    config SK68XX_T0LO_NANO_SECONDS
+        int "Bit 0 code, low level time, in nano seconds"
+        range 800 2000
+        default 1000
+        help
+            should >= 800
+    
+    config SK68XX_T1HI_NANO_SECONDS
+        int "Bit 1 code, high level time, in nano seconds"
+        range 620 1000
+        default 1000
+        help
+            The standard value is 640, should >=620 and <= 1000
+    
+    config SK68XX_T1LO_NANO_SECONDS
+        int "Bit 1 code, low level time, in nano seconds"
+        range 200 2000
+        default 350
+        help
+            should >= 200
+    
+    config SK68XX_TRST_NANO_SECONDS
+        int "Reset code , low level time, in nano seconds"
+        range 8000 80000
+        default 10000
+        help
+            should >= 8000
 endmenu
