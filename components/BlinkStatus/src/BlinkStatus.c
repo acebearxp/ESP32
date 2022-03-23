@@ -2,6 +2,8 @@
 #include <esp_check.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <esp_timer.h>
+#include <driver/timer.h>
 #include <esp_log.h>
 #include "SK68xx.h"
 
@@ -14,6 +16,7 @@ typedef struct _blinking_args_struct{
 } blinking_args_t;
 
 static struct _blinking_data_struct{
+    bool bCreateEventLoop;
     esp_event_loop_handle_t hEventLoop;
     esp_event_handler_instance_t hOnEvent;
     SK68xx_handler_t hSK68xx;
@@ -27,7 +30,7 @@ static struct _blinking_data_struct{
     blinking_args_t blinking_mode[6];
 } s_data ={
 #ifdef CONFIG_BLINK_STATUS_TIMER_GPT
-    .u8GPTimMark = BLINK_STATUS_TIMER_GPT_GROUP<<1|BLINK_STATUS_TIMER_GPT_INDEX,
+    .u8GPTimMark = (CONFIG_BLINK_STATUS_TIMER_GPT_GROUP<<1)|CONFIG_BLINK_STATUS_TIMER_GPT_INDEX,
 #endif
     .blinking_mode = {
         { { 0x00,0x00,0x00, 0x00,0x00,0x00 }, { 0xff, 0x00 }, 0x00 },
@@ -120,12 +123,64 @@ static esp_err_t _uninit_timer(void)
 #endif
 
 #ifdef CONFIG_BLINK_STATUS_TIMER_GPT
+static bool IRAM_ATTR on_isr_tim(void *pArgs)
+{
+    BaseType_t pxHigherPriorityTaskWoken;
+    esp_event_isr_post_to(s_data.hEventLoop, BLINK_STATUS_EVENT, BLINK_STATUS_EVENT_TICK, NULL, 0, &pxHigherPriorityTaskWoken);
+    return pxHigherPriorityTaskWoken == pdTRUE;
+}
 
+static void _start_timer(uint8_t u8Freq)
+{
+    uint32_t u32Hz = (CONFIG_BLINK_STATUS_TIMER_GPT_CLK_SRC?40000000:80000000)/CONFIG_BLINK_STATUS_TIMER_GPT_DIVIDER;
+    timer_set_alarm_value(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, u32Hz/u8Freq);
+    timer_set_counter_value(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, 0);
+    timer_start(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX);
+}
+
+static void _stop_timer(void)
+{
+    timer_pause(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX);
+}
+
+static esp_err_t _init_timer(void)
+{
+    timer_config_t tim_cfg = {
+        .alarm_en = TIMER_ALARM_EN,
+        .counter_en = TIMER_PAUSE,
+        .intr_type = TIMER_INTR_LEVEL,
+        .counter_dir = TIMER_COUNT_UP,
+        .auto_reload = TIMER_AUTORELOAD_EN,
+        .divider = CONFIG_BLINK_STATUS_TIMER_GPT_DIVIDER, // default is 40000 -> 1kHz
+        .clk_src = CONFIG_BLINK_STATUS_TIMER_GPT_CLK_SRC // default is XTAL@40MHz
+    };
+    ESP_ERROR_CHECK(timer_init(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, &tim_cfg));
+    ESP_ERROR_CHECK(timer_enable_intr(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX));
+    ESP_ERROR_CHECK(timer_isr_callback_add(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, on_isr_tim, 0, 0));
+    return ESP_OK;
+}
+
+static esp_err_t _uninit_timer(void)
+{
+    return timer_deinit(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX);
+}
 #endif
 
 esp_err_t BlinkStatus_Init(esp_event_loop_handle_t hEventLoop)
 {
     assert(s_data.hOnEvent == NULL);
+
+    if(hEventLoop == NULL){
+        s_data.bCreateEventLoop = true;
+        esp_event_loop_args_t evLoopArgs = {
+            .queue_size = 4,
+            .task_name = c_szTAG,
+            .task_priority = 5,
+            .task_stack_size = 2048,
+            .task_core_id = tskNO_AFFINITY
+        };
+        ESP_ERROR_CHECK(esp_event_loop_create(&evLoopArgs, &hEventLoop));
+    }
 
     s_data.hEventLoop = hEventLoop;
     ESP_ERROR_CHECK(esp_event_handler_instance_register_with(hEventLoop,
@@ -145,10 +200,14 @@ esp_err_t BlinkStatus_Uninit()
     esp_err_t espRet = esp_event_handler_instance_unregister_with(s_data.hEventLoop, BLINK_STATUS_EVENT, ESP_EVENT_ANY_ID, s_data.hOnEvent);
     if(espRet == ESP_OK) s_data.hOnEvent = NULL;
 
+    if(s_data.bCreateEventLoop){
+        ESP_ERROR_CHECK(esp_event_loop_delete(s_data.hEventLoop));
+    }
+
     return espRet;
 }
 
-uint8_t BlinkStatus_Get()
+BlinkStatus BlinkStatus_Get()
 {
     return s_data.u8Mode;
 }

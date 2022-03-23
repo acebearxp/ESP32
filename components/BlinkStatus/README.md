@@ -18,12 +18,9 @@ Blinking timing is controlled by a hardware timer of timer group.
 #include <esp_check.h>
 #include "BlinkStatus.h"
 
-#define BLINKING_TIMER_GROUP 0
-#define BLINKING_TIMER_INDEX 1
-
 void app_main(void)
 {
-    ESP_ERROR_CHECK(BlinkStatus_Init(BLINKING_TIMER_GROUP, BLINKING_TIMER_INDEX));
+    ESP_ERROR_CHECK(BlinkStatus_Init(NULL));
 
     while(1){
         BlinkStatus_Set(BLINK_STATUS_POWER_ON);

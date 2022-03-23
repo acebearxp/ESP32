@@ -14,10 +14,15 @@ typedef enum BlinkStatusEnum{
 
 /** initialize the BlinkStatus
  *  @param hEventLoop The event loop handler that drive the blinking
+ *                    if NULL, will create an event loop internally
  *  @return ESP_OK for success
  */
 esp_err_t BlinkStatus_Init(esp_event_loop_handle_t hEventLoop);
+
+/** uninitialize the BlinkStatus
+ *  @return ESP_OK for success
+ */
 esp_err_t BlinkStatus_Uninit();
 
-uint8_t BlinkStatus_Get();
+BlinkStatus BlinkStatus_Get();
 void BlinkStatus_Set(BlinkStatus status);
