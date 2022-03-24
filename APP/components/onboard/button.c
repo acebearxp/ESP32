@@ -1,9 +1,10 @@
-#include <stdio.h>
+#include "button.h"
+#include <string.h>
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <driver/gpio.h>
 #include "BlueSetupWiFi.h"
-#include "button.h"
+
 
 #define MAX_ACTIVE_SECONDS 30
 
@@ -14,23 +15,26 @@ typedef enum _onboard_event{
 
 ESP_EVENT_DEFINE_BASE(ONBOARD_EVENT);
 
-static struct _onboard_data{
+typedef struct _onboard_data{
     esp_event_loop_handle_t hEventLoop;
     esp_event_handler_instance_t hOnEvent;
     esp_timer_handle_t hTimer;
     bool bActiveBLE;
     uint8_t u8CountDeactiveBLE;
-} s_data;
+} onboard_data_t;
+
+static const char c_szName[] = "AceBear-ESP32S3-DevKitC-1";
+static onboard_data_t s_data;
 
 static void IRAM_ATTR gpio_isr_handler(void *pArgs)
 {
-    struct _onboard_data *pOnboardData = (struct _onboard_data*)pArgs;
+    onboard_data_t *pOnboardData = (onboard_data_t*)pArgs;
     esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
 }
 
 static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pData)
 {
-    struct _onboard_data *pOnboardData = (struct _onboard_data*)pArgs;
+    onboard_data_t *pOnboardData = (onboard_data_t*)pArgs;
 
     switch (evid)
     {
@@ -60,7 +64,7 @@ static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pData
 
 static void on_timer(void *pArgs)
 {
-    struct _onboard_data *pOnboardData = (struct _onboard_data*)pArgs;
+    onboard_data_t *pOnboardData = (onboard_data_t*)pArgs;
     esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_TICK, NULL, 0, 0);
 }
 
@@ -69,7 +73,16 @@ void ir_btn_active_ble(void)
     esp_event_post_to(s_data.hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
 }
 
-void init_onboard_btn(esp_event_loop_handle_t hEventLoop, bool bActiveBLE)
+static void read_wifi_cfg(char *bufWiFi, size_t len)
+{
+    // read wifi configuration
+    const char *szWiFi = BlueSetupWiFi_NVS_Read();
+    size_t size = strlen(szWiFi);
+    size = size < len-1 ? size : len-1;
+    strcpy(bufWiFi, szWiFi);
+}
+
+void init_onboard_btn(esp_event_loop_handle_t hEventLoop, bool bActiveBLE, char *bufWiFi, size_t len)
 {
     assert(s_data.hOnEvent == NULL);
 
@@ -98,8 +111,17 @@ void init_onboard_btn(esp_event_loop_handle_t hEventLoop, bool bActiveBLE)
     gpio_install_isr_service(0);
     gpio_isr_handler_add(GPIO_NUM_0, gpio_isr_handler, &s_data);
     
+    ESP_ERROR_CHECK(BlueSetupWiFi_Init(false));
+    read_wifi_cfg(bufWiFi, len);
+
     if(bActiveBLE){
-        esp_event_post_to(hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
+        BlueSetupWiFi_Start(c_szName);
+        s_data.u8CountDeactiveBLE = MAX_ACTIVE_SECONDS;
+        s_data.bActiveBLE = true;
+        ESP_ERROR_CHECK(esp_timer_start_periodic(s_data.hTimer, 1000000));
+    }
+    else{
+        ESP_ERROR_CHECK(BlueSetupWiFi_Deinit(false));
     }
 }
 
@@ -107,7 +129,7 @@ void StartBleAdv()
 {
     // WiFi provisioning via BT_BLE GATT
     ESP_ERROR_CHECK(BlueSetupWiFi_Init(false));
-    BlueSetupWiFi_Start("AceBear-ESP32S3-DevKitC-1");
+    BlueSetupWiFi_Start(c_szName);
 }
 
 void StopBleAdv(void)

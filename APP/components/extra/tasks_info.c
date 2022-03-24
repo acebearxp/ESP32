@@ -9,7 +9,7 @@ static char state2char(eTaskState state)
     return map[state];
 }
 
-void LogTasksInfo(const char *szTAG)
+void LogTasksInfo(const char *szTAG, bool bTaskDetail)
 {
     BaseType_t u32Count = uxTaskGetNumberOfTasks();
     TaskStatus_t *pTasksInfo = malloc(sizeof(TaskStatus_t) * u32Count);
@@ -29,19 +29,24 @@ void LogTasksInfo(const char *szTAG)
         }
     }
 
-    ESP_LOGI(szTAG, "%-7s %-12s%8s%8s%8s%6s", "#", "name","priority", "stk_wm", "stack", "state");
+    if(bTaskDetail)
+        ESP_LOGI(szTAG, "%-7s %-12s%8s%8s%8s%6s", "#", "name","priority", "stk_wm", "stack", "state");
+
     uint32_t u32StackTotal = 0;
     for(BaseType_t i=0;i<u32Count;i++){
         TaskStatus_t *pInfo = &pTasksInfo[pTasksIdx[i]];
         uint uStackSize = heap_caps_get_allocated_size(pInfo->pxStackBase);
         u32StackTotal += uStackSize;
-        ESP_LOGI(szTAG, "Task#%-2u %-16s%4u%8u%8u%4c",
-            pInfo->xTaskNumber,
-            pInfo->pcTaskName,
-            pInfo->uxCurrentPriority,
-            pInfo->usStackHighWaterMark,
-            uStackSize,
-            state2char(pInfo->eCurrentState));
+
+        if(bTaskDetail){
+            ESP_LOGI(szTAG, "Task#%-2u %-16s%4u%8u%8u%4c",
+                pInfo->xTaskNumber,
+                pInfo->pcTaskName,
+                pInfo->uxCurrentPriority,
+                pInfo->usStackHighWaterMark,
+                uStackSize,
+                state2char(pInfo->eCurrentState));
+        }
     }
 
     uint32_t u32FreeSizeTotal = esp_get_free_heap_size();

@@ -157,9 +157,10 @@ const char* BlueSetupWiFi_NVS_Read(void)
 const char* BlueSetupWiFi_NVS_Save(char *szConfig)
 {
     uint16_t u16Len = strlen(szConfig);
-    s_data.pszSPL = realloc(s_data.pszSPL, u16Len);
+    s_data.pszSPL = realloc(s_data.pszSPL, u16Len+1);
     strcpy(s_data.pszSPL, szConfig);
     ESP_ERROR_CHECK(nvs_set_str(s_data.hNVS, c_szKey, s_data.pszSPL));
+    ESP_ERROR_CHECK(nvs_commit(s_data.hNVS));
     // ESP_LOGI(c_szTAG, "nvs_set_str: %s", s_pszSPL);
 
     return s_data.pszSPL;

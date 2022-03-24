@@ -1,12 +1,31 @@
+#include "task_tm.h"
 #include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <esp_event.h>
 #include <esp_log.h>
 #include <esp_err.h>
+#include <esp_netif.h>
 #include <lwip/sockets.h>
-#include "task_tm.h"
 
 #define UDP_PORT (8323)
+
+typedef enum _udp_test_event{
+    UDP_TEST_EVENT_TX
+} udp_test_event_t;
+
+ESP_EVENT_DEFINE_BASE(UDP_TEST_EVENT);
+
+typedef struct _udp_test_data{
+    int sock;
+    struct sockaddr_in srcAddr;
+    struct sockaddr_in destAddr;
+    esp_timer_handle_t hTimer;
+    esp_event_loop_handle_t hEventLoop;
+    esp_event_handler_instance_t hOnEvent;
+} udp_task_data_t;
+
+static udp_task_data_t s_data;
 
 bool get_tm(char *buf, uint8_t len)
 {
@@ -21,7 +40,7 @@ bool get_tm(char *buf, uint8_t len)
 
 void task_udp_recv(void *pArgs)
 {
-    int sock = (int)pArgs;
+    udp_task_data_t *pData = (udp_task_data_t*)pArgs;
 
     struct sockaddr_in remoteAddr;
     socklen_t remoteAddrLen;
@@ -33,48 +52,67 @@ void task_udp_recv(void *pArgs)
 
     char buf[256];
     while(true){
-        uint8_t u8 = recvfrom(sock, buf, 255, 0, (struct sockaddr*)&remoteAddr, &remoteAddrLen);
+        uint8_t u8 = recvfrom(pData->sock, buf, 255, 0, (struct sockaddr*)&remoteAddr, &remoteAddrLen);
         buf[u8] = 0;
-        ESP_LOGI("task_udp_recv", "recv: %s\n", buf);
+        ESP_LOGI("task_udp_recv", "%d.%d.%d.%d: %s\n", IP2STR((struct esp_ip4_addr*)&remoteAddr.sin_addr), buf);
     }
 }
 
-void task_udp_test(void *pArgs)
+static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pEvData)
 {
-    char szH[] = "Hello from AceBear-ESP32S3";
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    if(sock < 0){
-        ESP_LOGE("udp_test", "socket failed...");
+    udp_task_data_t *pData = (udp_task_data_t*)pArgs;
+
+    char szTm[64];
+    get_tm(szTm, sizeof(szTm));
+
+    char buf[256];
+    sprintf(buf, "%s [%s]\n", "Hello from AceBear-ESP32S3", szTm); 
+
+    short s16Sent = sendto(pData->sock, buf, strlen(buf)+1, 0, (struct sockaddr*)&pData->destAddr, sizeof(pData->destAddr));
+    if(s16Sent < 0){
+        ESP_LOGW("task_udp_test", "sent failed!");
     }
-    struct sockaddr_in srcAddr;
-    memset(&srcAddr, 0, sizeof(srcAddr));
-    srcAddr.sin_len = sizeof(srcAddr);
-    srcAddr.sin_family = AF_INET;
-    srcAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    srcAddr.sin_port = htons(UDP_PORT);
-    assert(bind(sock, (struct sockaddr*)&srcAddr, sizeof(srcAddr)) == 0);
+}
+
+void on_timer(void *pArgs)
+{
+    udp_task_data_t *pData = (udp_task_data_t*)pArgs;
+    esp_event_post_to(pData->hEventLoop, UDP_TEST_EVENT, UDP_TEST_EVENT_TX, NULL, 0, 0);
+}
+
+void start_udp_test(esp_event_loop_handle_t hEventLoop)
+{
+    s_data.sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if(s_data.sock < 0){
+        ESP_LOGE("udp_test", "socket failed...");
+        return;
+    }
+
+    s_data.srcAddr.sin_len = sizeof(struct sockaddr_in);
+    s_data.srcAddr.sin_family = AF_INET;
+    s_data.srcAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    s_data.srcAddr.sin_port = htons(UDP_PORT);
+    assert(bind(s_data.sock, (struct sockaddr*)&s_data.srcAddr, s_data.srcAddr.sin_len) == 0);
 
     // 10.0.11.50
-    struct sockaddr_in destAddr;
-    memset(&srcAddr, 0, sizeof(srcAddr));
-    destAddr.sin_len = sizeof(srcAddr);
-    destAddr.sin_family = AF_INET;
-    destAddr.sin_addr.s_addr = inet_addr("10.0.11.50");
-    destAddr.sin_port = htons(UDP_PORT);
+    s_data.destAddr.sin_len = sizeof(struct sockaddr_in);
+    s_data.destAddr.sin_family = AF_INET;
+    s_data.destAddr.sin_addr.s_addr = inet_addr("10.0.11.50");
+    s_data.destAddr.sin_port = htons(UDP_PORT);
 
-    assert(xTaskCreate(task_udp_recv, "udp_recv", 4096, (void*)sock, 3, 0) == pdPASS);
+    assert(xTaskCreate(task_udp_recv, "udp_recv", 4096, &s_data, 16, 0) == pdPASS);
 
-    while(true){     
-        char szTm[64];
-        get_tm(szTm, sizeof(szTm));
+    s_data.hEventLoop = hEventLoop;
+    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
+        hEventLoop, UDP_TEST_EVENT, ESP_EVENT_ANY_ID, on_event, &s_data, &s_data.hOnEvent));
 
-        char buf[256];
-        sprintf(buf, "%s [%s]\n", szH, szTm); 
-
-        short s16Sent = sendto(sock, buf, strlen(buf)+1, 0, (struct sockaddr*)&destAddr, sizeof(destAddr));
-        if(s16Sent < 0){
-            ESP_LOGW("task_udp_test", "sent failed!");
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
+    esp_timer_create_args_t args = {
+        .callback = on_timer,
+        .arg = &s_data,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "udp_send_test",
+        .skip_unhandled_events = true
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&args, &s_data.hTimer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(s_data.hTimer, 1000000*5));
 }
