@@ -92,7 +92,7 @@ void app_main(void)
     blink_auto();
 
     // IrRC
-    IrRC_Init(hEventLoop, 4, 7, 5); // RMT_RX_7---GPIO_4
+    IrRC_Init(hEventLoop, 4, 7, 15); // RMT_RX_7---GPIO_4
     IrRC_Set_OnData(4, on_ir_data, 0);
 
     nvs_start();
@@ -120,6 +120,11 @@ void app_main(void)
     char szTm[64];
     uint8_t u8Count = 0;
     while(1){
+        if(u8Count % 30 == 15){
+        }
+        else if(u8Count % 30 == 29){
+        }
+
         // esp_event_loop_run(hEventLoop, pdMS_TO_TICKS(1000));
         vTaskDelay(pdMS_TO_TICKS(1000));
         u8Count++;

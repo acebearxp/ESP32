@@ -7,18 +7,16 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_event.h>
+#include <esp_timer.h>
 #include <esp_netif.h>
 #include <esp_wifi.h>
 #include "WiFiSTA.h"
 
-#define MAX_RETRY_COUNT_PER_SSID   3
+#define MAX_RETRY_COUNT_PER_SSID    3
+#define MAX_WAITING_FOR_IP_SECONDS  8
 
 #define WIFI_STA_CHANGED_BIT    BIT0
-#define WIFI_CONN_CHANGED_BIT   BIT1
-#define IP_CONN_CHANGED_BIT     BIT2
-#define CONNECT_RESULT_BIT      BIT3
-#define CTRL_QUIT_BIT           BIT4
-#define TASK_QUIT_BIT           BIT5
+#define CONNECT_RESULT_BIT      BIT1
 
 static const char c_szTAG[] = "WiFiSTA";
 
@@ -32,8 +30,9 @@ typedef struct _wifi_sta_data_struct{
     esp_netif_t *pNetIf;
     esp_event_handler_instance_t hander_wifi;
     esp_event_handler_instance_t hander_ip;
+    esp_timer_handle_t hTimerWaitForIP;
     bool bAutoReconnect;
-    TaskHandle_t task_connect;
+    uint8_t u8RetryCount;
     uint8_t u8Count; // the count of entries in pListSP
     uint8_t u8Idx;
     ssid_pwd_t *pListSP;
@@ -44,6 +43,9 @@ typedef struct _wifi_sta_data_struct{
 } wifi_sta_data_t;
 
 static wifi_sta_data_t s_wifi_sta_data;
+
+static esp_err_t connect(uint8_t u8Idx);
+static void check_for_reconnect(wifi_sta_data_t *pWiFiData, uint8_t u8Reason);
 
 static void on_networking_event(void *pArg, esp_event_base_t ev, int32_t evid, void *pData)
 {
@@ -62,14 +64,16 @@ static void on_networking_event(void *pArg, esp_event_base_t ev, int32_t evid, v
             case WIFI_EVENT_STA_CONNECTED:
                 pWiFiData->bSTAConnected = true;
                 ESP_LOGI(c_szTAG, "WiFi connected");
-                xEventGroupSetBits(pWiFiData->evgWiFi, WIFI_CONN_CHANGED_BIT);
+                // 通常过几秒会有IP_EVENT_STA_GOT_IP
+                // 但如果长时间拿不到IP,需要断开重试
+                esp_timer_start_once(pWiFiData->hTimerWaitForIP, 1000000*MAX_WAITING_FOR_IP_SECONDS); // 8 seconds
                 break;
             case WIFI_EVENT_STA_DISCONNECTED:
             {
                 pWiFiData->bSTAConnected = false;
                 wifi_event_sta_disconnected_t *pEvData = (wifi_event_sta_disconnected_t*)pData;
                 ESP_LOGI(c_szTAG, "WiFi disconnected with reason %u", pEvData->reason);
-                xEventGroupSetBits(pWiFiData->evgWiFi, WIFI_CONN_CHANGED_BIT);
+                check_for_reconnect(pWiFiData, pEvData->reason);
                 break;
             }
             case WIFI_EVENT_STA_BEACON_TIMEOUT:
@@ -85,7 +89,9 @@ static void on_networking_event(void *pArg, esp_event_base_t ev, int32_t evid, v
             case IP_EVENT_STA_GOT_IP:
             {
                 pWiFiData->bIPConnected = true;
-                xEventGroupSetBits(pWiFiData->evgWiFi, IP_CONN_CHANGED_BIT);
+                pWiFiData->u8RetryCount = 0;
+                esp_timer_stop(pWiFiData->hTimerWaitForIP);
+                xEventGroupSetBits(pWiFiData->evgWiFi, CONNECT_RESULT_BIT);
                 if(pWiFiData->onIPChanged){
                     ip_event_got_ip_t *pEvData = (ip_event_got_ip_t*)pData;
                     // ESP_LOGI(c_szTAG, "IP %d.%d.%d.%d", IP2STR(&pEvData->ip_info.ip));
@@ -95,7 +101,8 @@ static void on_networking_event(void *pArg, esp_event_base_t ev, int32_t evid, v
             }
             case IP_EVENT_STA_LOST_IP:
                 pWiFiData->bIPConnected = false;
-                xEventGroupSetBits(pWiFiData->evgWiFi, IP_CONN_CHANGED_BIT);
+                // 等待一会儿,看看是否可以重获IP
+                esp_timer_start_once(pWiFiData->hTimerWaitForIP, 1000000*MAX_WAITING_FOR_IP_SECONDS); // 8 seconds
                 if(pWiFiData->onIPChanged){
                     pWiFiData->onIPChanged(NULL);
                 }
@@ -109,75 +116,13 @@ static void on_networking_event(void *pArg, esp_event_base_t ev, int32_t evid, v
     }
 }
 
-static esp_err_t connect(uint8_t u8Idx);
 
-static void task_connect(void *pArgs)
+static void on_timer_waiting_for_ip(void *pArgs)
 {
     wifi_sta_data_t *pWiFiData = (wifi_sta_data_t*)pArgs;
-
-    const uint8_t c_u8FastRetryMax = pWiFiData->u8Count * MAX_RETRY_COUNT_PER_SSID;
-    uint8_t u8RetryCount = 0, u8Idx = pWiFiData->u8Idx;
-    TickType_t tickWait = pdMS_TO_TICKS(5000);
-
-    while(true){
-        EventBits_t bits = xEventGroupWaitBits(pWiFiData->evgWiFi,
-            WIFI_STA_CHANGED_BIT|WIFI_CONN_CHANGED_BIT|IP_CONN_CHANGED_BIT|CTRL_QUIT_BIT,
-            pdTRUE, pdFALSE, tickWait);
-        
-        ESP_LOGD(c_szTAG, "====>: 0x%02X auto:%u sta:%u-%u ip:%u",
-                bits,
-                pWiFiData->bAutoReconnect,
-                pWiFiData->bSTAReady,
-                pWiFiData->bSTAConnected,
-                pWiFiData->bIPConnected);
-        
-        if(bits & CTRL_QUIT_BIT) break;
-        
-        if(pWiFiData->bIPConnected && pWiFiData->bSTAConnected){
-            // connect succeeded
-            pWiFiData->u8Idx = u8Idx;
-            // reset retry count
-            u8RetryCount = 0;
-            tickWait = portMAX_DELAY;
-            xEventGroupSetBits(pWiFiData->evgWiFi, CONNECT_RESULT_BIT);
-        }
-        else if(pWiFiData->bSTAReady && !pWiFiData->bSTAConnected){
-            if(u8RetryCount < c_u8FastRetryMax){
-                if(u8RetryCount > 0)
-                    u8Idx = (u8Idx+1) % pWiFiData->u8Count;
-                ESP_ERROR_CHECK(connect(u8Idx));
-                u8RetryCount++;
-                tickWait = pdMS_TO_TICKS(5000);
-            }
-            else{
-                if(u8RetryCount ==  c_u8FastRetryMax) // connect failed
-                    xEventGroupSetBits(pWiFiData->evgWiFi, CONNECT_RESULT_BIT);
-                
-                // switch to slow retry
-                if((u8RetryCount-c_u8FastRetryMax) % 6 == 5){
-                    u8Idx = (u8Idx+1) % pWiFiData->u8Count;
-                    ESP_ERROR_CHECK(connect(u8Idx));
-                }
-                u8RetryCount++;
-                if(u8RetryCount == 0xff) u8RetryCount = c_u8FastRetryMax;
-            }
-        }
-        else if(pWiFiData->bSTAConnected){
-            ESP_LOGI(c_szTAG, "waiting to get ip address...");
-        }
-        else{
-            ESP_LOGW(c_szTAG, "WARNNING: 0x%02X auto:%u sta:%u-%u ip:%u",
-                bits,
-                pWiFiData->bAutoReconnect,
-                pWiFiData->bSTAReady,
-                pWiFiData->bSTAConnected,
-                pWiFiData->bIPConnected);
-            tickWait = pdMS_TO_TICKS(60000);
-        }
+    if(!pWiFiData->bIPConnected){
+        check_for_reconnect(pWiFiData, WIFI_REASON_BEACON_TIMEOUT);
     }
-    
-    xEventGroupSetBits(pWiFiData->evgWiFi, TASK_QUIT_BIT);
-    vTaskDelete(NULL);
 }
 
 void set_wifi_ssid_cfg(wifi_config_t *pCfg, uint8_t u8Idx)
@@ -197,7 +142,32 @@ esp_err_t connect(uint8_t u8Idx)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
 
     ESP_LOGI(c_szTAG, "connecting to [%s]", s_wifi_sta_data.pListSP[u8Idx].szSSID);
+    s_wifi_sta_data.u8RetryCount++;
     return esp_wifi_connect();
+}
+
+static void check_for_reconnect(wifi_sta_data_t *pWiFiData, uint8_t u8Reason)
+{
+    if(u8Reason == WIFI_REASON_ASSOC_LEAVE){
+        // 主动发起的断开
+        xEventGroupSetBits(pWiFiData->evgWiFi, CONNECT_RESULT_BIT);
+    }
+    else if(pWiFiData->u8RetryCount >= pWiFiData->u8Count * MAX_RETRY_COUNT_PER_SSID){
+        if(pWiFiData->bAutoReconnect){
+            // 重试
+            pWiFiData->u8Idx = (pWiFiData->u8Idx+1) % pWiFiData->u8Count;
+            connect(pWiFiData->u8Idx);
+        }
+        else{
+            // 连接失败
+            xEventGroupSetBits(pWiFiData->evgWiFi, CONNECT_RESULT_BIT);
+        }
+    }
+    else{
+        // 重试
+        pWiFiData->u8Idx = (pWiFiData->u8Idx+1) % pWiFiData->u8Count;
+        connect(pWiFiData->u8Idx);
+    }
 }
 
 esp_err_t WiFi_STA_Init()
@@ -219,12 +189,24 @@ esp_err_t WiFi_STA_Init()
     
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID,
         on_networking_event, &s_wifi_sta_data, &s_wifi_sta_data.hander_ip));
+    
+    // timer waiting for ip
+    esp_timer_create_args_t timer_args = {
+        .callback = on_timer_waiting_for_ip,
+        .arg = &s_wifi_sta_data,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "on_timer_waiting_for_ip",
+        .skip_unhandled_events = true
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &s_wifi_sta_data.hTimerWaitForIP));
 
     return ESP_OK;
 }
 
 esp_err_t WiFi_STA_Deinit()
 {
+    ESP_ERROR_CHECK(esp_timer_delete(s_wifi_sta_data.hTimerWaitForIP));
+
     ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, ESP_EVENT_ANY_ID, s_wifi_sta_data.hander_ip));
     ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_wifi_sta_data.hander_wifi));
 
@@ -355,46 +337,26 @@ esp_err_t WiFi_STA_Stop()
     return (s_wifi_sta_data.bSTAConnected == false ? ESP_OK : ESP_FAIL);
 }
 
-static void stop_task_wifi_connect(void)
-{
-    xEventGroupSetBits(s_wifi_sta_data.evgWiFi, CTRL_QUIT_BIT);
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_sta_data.evgWiFi,
-            TASK_QUIT_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(1000));
-    if(!(bits & TASK_QUIT_BIT)){
-        ESP_LOGW(c_szTAG, "task wifi_connect doesn't quit in time");
-        vTaskDelete(s_wifi_sta_data.task_connect);
-    }
-    s_wifi_sta_data.task_connect = NULL;
-}
-
 esp_err_t WiFi_STA_Connect(bool bAutoReconnect)
 {
-    if(s_wifi_sta_data.task_connect) return ESP_ERR_INVALID_STATE;
-
-    s_wifi_sta_data.bAutoReconnect = bAutoReconnect;
-    BaseType_t xRet = xTaskCreate(task_connect, "wifi_connect", 4096, &s_wifi_sta_data, 5, &s_wifi_sta_data.task_connect);
-    assert(xRet == pdPASS);
-
+    ESP_ERROR_CHECK(connect(s_wifi_sta_data.u8Idx));
     xEventGroupWaitBits(s_wifi_sta_data.evgWiFi, CONNECT_RESULT_BIT, pdTRUE, pdFALSE, portMAX_DELAY);
 
-    if(!(s_wifi_sta_data.bIPConnected && bAutoReconnect)){
-        stop_task_wifi_connect();
+    if(s_wifi_sta_data.bIPConnected){
+        s_wifi_sta_data.bAutoReconnect = bAutoReconnect;
+        return ESP_OK;
     }
-    
-    return s_wifi_sta_data.bIPConnected ? ESP_OK : ESP_ERR_WIFI_CONN;
+    else{
+        return ESP_ERR_WIFI_CONN;
+    }
 }
 
 esp_err_t WiFi_STA_Disconnect()
 {
-    // stop task wifi_connect
-    if(s_wifi_sta_data.bAutoReconnect){
-        stop_task_wifi_connect();
-    }
-
     // disconnect
     ESP_ERROR_CHECK(esp_wifi_disconnect());
     xEventGroupWaitBits(s_wifi_sta_data.evgWiFi,
-            WIFI_CONN_CHANGED_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(1000));
+            CONNECT_RESULT_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(1000));
     
     return (s_wifi_sta_data.bSTAConnected ? ESP_FAIL: ESP_OK);
 }
