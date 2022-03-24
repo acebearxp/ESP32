@@ -1,0 +1,7 @@
+<resources>
+    <dimen name="fab_margin">16dp</dimen>
+	<dimen name="settings_label_margin">4sp</dimen>
+	<dimen name="settings_padding_text">16sp</dimen>
+	<dimen name="ssid_pwd_block_padding">3px</dimen>
+	<dimen name="basic_text_padding">4sp</dimen>
+</resources>

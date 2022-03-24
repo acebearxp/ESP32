@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:text="@string/settings_label_dev_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="@dimen/settings_label_margin"
+            android:layout_alignParentLeft="true"
+            android:layout_centerVertical="true"/>
+        <CheckBox
+            android:checked="true"
+            android:text="@string/settings_label_dev_name_regex"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="@dimen/settings_label_margin"
+            android:layout_alignParentRight="true"
+            android:gravity="center_vertical"
+            android:id="@+id/settings_dev_name_regex" />
+    </RelativeLayout>
+    <EditText
+        android:text="@string/settings_default_dev_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="text"
+        android:paddingLeft="@dimen/settings_padding_text"
+        android:id="@+id/settings_dev_name" />
+    <TextView
+        android:text="@string/settings_label_scan_max_count"
+        android:layout_margin="@dimen/settings_label_margin"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+    <EditText
+        android:text="@integer/settings_default_scan_max_count"
+        android:inputType="number"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="@dimen/settings_padding_text"
+        android:id="@+id/settings_scan_max_count" />
+    <TextView
+        android:text="@string/settings_label_scan_max_duration"
+        android:layout_margin="@dimen/settings_label_margin"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+    <EditText
+        android:text="@integer/settings_default_scan_max_duration"
+        android:inputType="number"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingLeft="@dimen/settings_padding_text"
+        android:id="@+id/settings_scan_max_duration" />
+
+</LinearLayout>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="horizontal"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+    <ImageView
+        android:src="@drawable/bluesetupwifi"
+        android:layout_width="32sp"
+        android:layout_height="32sp"
+        android:layout_margin="4dp" />
+    <TextView
+        android:id="@+id/dev_name"
+        android:text="@string/placeholder_bt_device"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:textSize="@dimen/abc_text_size_body_1_material"/>
+</LinearLayout>
