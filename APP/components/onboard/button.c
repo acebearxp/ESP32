@@ -1,64 +1,90 @@
 #include <stdio.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/queue.h>
 #include <esp_log.h>
-#include <esp_netif.h>
+#include <esp_timer.h>
 #include <driver/gpio.h>
 #include "BlueSetupWiFi.h"
 #include "button.h"
 
 #define MAX_ACTIVE_SECONDS 30
 
-static QueueHandle_t s_queue;
-static bool s_bActiveBLE = false;
-static uint8_t s_u8Count = 0;
+typedef enum _onboard_event{
+    ONBOARD_EVENT_BTN_ACTIVE_BLE,
+    ONBOARD_EVENT_TICK
+} onboard_event_t;
+
+ESP_EVENT_DEFINE_BASE(ONBOARD_EVENT);
+
+static struct _onboard_data{
+    esp_event_loop_handle_t hEventLoop;
+    esp_event_handler_instance_t hOnEvent;
+    esp_timer_handle_t hTimer;
+    bool bActiveBLE;
+    uint8_t u8CountDeactiveBLE;
+} s_data;
 
 static void IRAM_ATTR gpio_isr_handler(void *pArgs)
 {
-    uint8_t u8Data = 0;
-    xQueueSendToBackFromISR(s_queue, &u8Data, 0);
+    struct _onboard_data *pOnboardData = (struct _onboard_data*)pArgs;
+    esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
 }
 
-static void task_boot_btn(void *pArgs)
+static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pData)
 {
-    uint8_t u8Data = 1;
-    TickType_t tickWait = portMAX_DELAY;
-    while(true){
-        if(xQueueReceive(s_queue, &u8Data, tickWait) == pdTRUE){
-            s_u8Count = MAX_ACTIVE_SECONDS;
-            if(!s_bActiveBLE){
-                StartBleAdv(u8Data);
-                s_bActiveBLE = true;
-                tickWait = pdMS_TO_TICKS(1000);
-            }
-        }
-        else{
-            if(s_u8Count > 0) s_u8Count--;
+    struct _onboard_data *pOnboardData = (struct _onboard_data*)pArgs;
 
-            if(s_u8Count == 0){
-                if(BlueSetupWiFi_GetLink() != BlueSetupWiFi_Link_CONNECTED){
-                    // 如果蓝牙已经连接上了客户端,保持不断开
-                    StopBleAdv();
-                    s_bActiveBLE = false;
-                    tickWait = portMAX_DELAY;
-                }
+    switch (evid)
+    {
+    case ONBOARD_EVENT_BTN_ACTIVE_BLE:
+        pOnboardData->u8CountDeactiveBLE = MAX_ACTIVE_SECONDS;
+        if(!pOnboardData->bActiveBLE){
+            StartBleAdv();
+            pOnboardData->bActiveBLE = true;
+            esp_timer_start_periodic(pOnboardData->hTimer, 1000000);
+        }
+        break;
+    case ONBOARD_EVENT_TICK:
+        if(pOnboardData->u8CountDeactiveBLE > 0) pOnboardData->u8CountDeactiveBLE--;
+        if(pOnboardData->u8CountDeactiveBLE == 0){
+            if(BlueSetupWiFi_GetLink() != BlueSetupWiFi_Link_CONNECTED){
+                // 如果蓝牙已经连接上了客户端,保持不断开
+                StopBleAdv();
+                pOnboardData->bActiveBLE = false;
+                esp_timer_stop(pOnboardData->hTimer);
             }
         }
+        break;
+    default:
+        break;
     }
+}
+
+static void on_timer(void *pArgs)
+{
+    struct _onboard_data *pOnboardData = (struct _onboard_data*)pArgs;
+    esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_TICK, NULL, 0, 0);
 }
 
 void ir_btn_active_ble(void)
 {
-    uint8_t u8Data = 1;
-    xQueueSendToBack(s_queue, &u8Data, 0);
+    esp_event_post_to(s_data.hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
 }
 
-void boot_btn_active_ble(void)
+void init_onboard_btn(esp_event_loop_handle_t hEventLoop, bool bActiveBLE)
 {
-    assert(s_queue == NULL);
-    s_queue = xQueueCreate(8, sizeof(uint8_t));
-    xTaskCreate(task_boot_btn, "boot_btn", 4096, 0, 3, 0);
+    assert(s_data.hOnEvent == NULL);
+
+    esp_timer_create_args_t timer_args = {
+        .callback = on_timer,
+        .arg = &s_data,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "onboard_button",
+        .skip_unhandled_events = true
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &s_data.hTimer));
+
+    s_data.hEventLoop = hEventLoop;
+    ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
+        hEventLoop, ONBOARD_EVENT, ESP_EVENT_ANY_ID, on_event, &s_data, &s_data.hOnEvent));
 
     gpio_config_t gpio_boot_btn = {
         .pin_bit_mask = GPIO_SEL_0,
@@ -70,23 +96,22 @@ void boot_btn_active_ble(void)
 
     ESP_ERROR_CHECK(gpio_config(&gpio_boot_btn));
     gpio_install_isr_service(0);
-    gpio_isr_handler_add(GPIO_NUM_0, gpio_isr_handler, 0);
-
-    uint8_t u8Data = 0;
-    xQueueSendToBack(s_queue, &u8Data, 0);
+    gpio_isr_handler_add(GPIO_NUM_0, gpio_isr_handler, &s_data);
+    
+    if(bActiveBLE){
+        esp_event_post_to(hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
+    }
 }
 
-void StartBleAdv(uint8_t u8Flag)
+void StartBleAdv()
 {
     // WiFi provisioning via BT_BLE GATT
-    ESP_LOGI("task_boot_btn", "StartBleAdv()");
     ESP_ERROR_CHECK(BlueSetupWiFi_Init(false));
     BlueSetupWiFi_Start("AceBear-ESP32S3-DevKitC-1");
 }
 
 void StopBleAdv(void)
 {
-    ESP_LOGI("task_boot_btn", "StopBleAdv()");
     ESP_ERROR_CHECK(BlueSetupWiFi_Stop());
     ESP_ERROR_CHECK(BlueSetupWiFi_Deinit(false));
 }

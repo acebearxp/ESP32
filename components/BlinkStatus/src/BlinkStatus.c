@@ -1,7 +1,5 @@
 #include "BlinkStatus.h"
 #include <esp_check.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/queue.h>
 #include <esp_timer.h>
 #include <driver/timer.h>
 #include <esp_log.h>

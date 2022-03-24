@@ -96,7 +96,7 @@ void app_main(void)
     IrRC_Set_OnData(4, on_ir_data, 0);
 
     nvs_start();
-    boot_btn_active_ble();
+    init_onboard_btn(hEventLoop, true);
     const char *szWiFi = BlueSetupWiFi_NVS_Read();
 
     if(szWiFi != NULL){
