@@ -2,3 +2,6 @@
 build/
 
 sdkconfig
+sdkconfig.old
+
+*.code-workspace
