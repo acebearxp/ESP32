@@ -14,10 +14,10 @@ ESP32的试验性项目.
 依赖于 `乐鑫物联网框架` [esp-idf framework](https://github.com/espressif/esp-idf). 当前使用的是v4.4版本.
 
 ## components
-+ [SK68xx](./SK68xx) RGB-LED driver.  
++ [SK68xx](./components/SK68xx) RGB-LED driver.  
   There's a built-in RGB-LED on dev-board [ESP32-S3-DevKitC-1](https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1.html) connecting to `GPIO48`.
   The mode of RGB-LED is [SK6812-MINI-HS](https://www.rose-lighting.com/products/digital-full-color-mini-hs-sk6812-3535-rgb-smd-pixel-led-chip-dc5v) made by [Rose-Lighting](https://www.rose-lighting.com)
-+ [BlinkStatus](./BlinkStatus) Using RGB-LED blinking to indicate the app status.
-+ [BlueSetupWifi](./BlueSetupWifi) Setup wifi connection parameters via BLE.
-+ [WiFiSTA](./WiFiSTA) Connect WiFi AP, with auto-reconnecting, and lwIP protocol
-+ [IrRC](./IrRC) Ir remote controller receiver
++ [BlinkStatus](./components/BlinkStatus) Using RGB-LED blinking to indicate the app status.
++ [BlueSetupWifi](./components/BlueSetupWifi) Setup wifi connection parameters via BLE.
++ [WiFiSTA](./components/WiFiSTA) Connect WiFi AP, with auto-reconnecting, and lwIP protocol
++ [IrRC](./components/IrRC) Ir remote controller receiver
