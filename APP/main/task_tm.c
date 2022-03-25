@@ -106,7 +106,7 @@ void start_udp_test(esp_event_loop_handle_t hEventLoop)
     ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
         hEventLoop, UDP_TEST_EVENT, ESP_EVENT_ANY_ID, on_event, &s_data, &s_data.hOnEvent));
 
-    esp_timer_create_args_t args = {
+    /*esp_timer_create_args_t args = {
         .callback = on_timer,
         .arg = &s_data,
         .dispatch_method = ESP_TIMER_TASK,
@@ -114,5 +114,10 @@ void start_udp_test(esp_event_loop_handle_t hEventLoop)
         .skip_unhandled_events = true
     };
     ESP_ERROR_CHECK(esp_timer_create(&args, &s_data.hTimer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(s_data.hTimer, 1000000*5));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(s_data.hTimer, 1000000*5));*/
+}
+
+void trigger_udp_send(void)
+{
+    esp_event_post_to(s_data.hEventLoop, UDP_TEST_EVENT, UDP_TEST_EVENT_TX, NULL, 0, 0);
 }

@@ -11,7 +11,6 @@
 #include "blink.h"
 #include "task_tm.h"
 #include "IrRC.h"
-#include "cs100a.h"
 
 static const char c_szTAG[] = "APP";
 
@@ -62,11 +61,12 @@ void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArg
         case 8:
         {
             // 方向上键
-            uint16_t u16Tim = CS100A_Ping();
-            float fRange = 0.17f * u16Tim;
-            ESP_LOGI(c_szTAG, "%.0fmm", fRange);
             break;
         }
+        case 20:
+            // 方向下键
+            trigger_udp_send();
+            break;
         default:
             break;
         }
@@ -88,13 +88,6 @@ void task_start(void *pArgs)
     nvs_start();
     char szWiFi[512];
     init_onboard_btn(hEventLoop, false, szWiFi, 512);
-
-    // CS100A
-    CS100A_Config_t cs100_cfg = {
-        .tx = { RMT_CHANNEL_1, GPIO_NUM_14 },
-        .rx = { RMT_CHANNEL_6, GPIO_NUM_13 }
-    };
-    CS100A_Init(&cs100_cfg);
 
     if(szWiFi != NULL){
         // WiFi Startup
