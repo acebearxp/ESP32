@@ -2,5 +2,5 @@
 idf_component_register(SRCS app_main.c blink.c task_tm.c
     INCLUDE_DIRS .
     PRIV_REQUIRES onboard extra
-        BlinkStatus BlueSetupWiFi WiFiSTA IrRC
+        BlinkStatus BlueSetupWiFi WiFiSTA IrRC CS100A
         nvs_flash)

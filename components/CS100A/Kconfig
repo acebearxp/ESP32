@@ -1,0 +1,13 @@
+menu "CS100A"
+    config CS100A_TRIG_US
+        int "The high level time that trigger transmit(in us)"
+        range 5 200
+        default 50
+        help
+            Should greater than 10us, usually 50us
+    
+    config CS100A_ECHO_MAX_MS
+        int "The longest time waiting for echo(in ms)"
+        range 100 5000
+        default 2000
+endmenu
