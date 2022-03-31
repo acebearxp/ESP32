@@ -106,6 +106,7 @@ void start_udp_test(esp_event_loop_handle_t hEventLoop)
     ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
         hEventLoop, UDP_TEST_EVENT, ESP_EVENT_ANY_ID, on_event, &s_data, &s_data.hOnEvent));
 
+    // invoke trigger_udp_send() outside intead of using esp_timer
     /*esp_timer_create_args_t args = {
         .callback = on_timer,
         .arg = &s_data,
