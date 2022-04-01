@@ -31,7 +31,7 @@ static void process_x12_cmd(char *buf, size_t len, uart_task_data_t *pdata)
         if(i>0 && buf[i-1] == 0x12){
             int pos_end = i + (uint8_t)buf[i] - 2;
             if(pos_end < len && buf[pos_end] == 0x12){
-                if((uint8_t)buf[i] >= 6){
+                if((uint8_t)buf[i] == 6){
                     esp_event_post_to(pdata->hEventLoop, UART_TASK_EVENT, UART_TASK_IR, buf+i+1, 3, 0);
                 }
                 for(int j=i-1;j<=pos_end;j++) buf[j] = 0x23;

@@ -2,6 +2,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
+#include <driver/temp_sensor.h>
 
 static char state2char(eTaskState state)
 {
@@ -51,10 +52,25 @@ void LogTasksInfo(const char *szTAG, bool bTaskDetail)
 
     uint32_t u32FreeSizeTotal = esp_get_free_heap_size();
     uint32_t u32FreeSizeSRAM = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    // not implemented yet in v4.x
+    // float fTemper = detectChipTemperature();
     ESP_LOGI(szTAG, "=== total %u tasks, total stack size %uk ===", u32Count, u32StackTotal>>10);
     ESP_LOGI(szTAG, "=== total free heap size %uk, internal free heap size %uk ===",
         u32FreeSizeTotal>>10, u32FreeSizeSRAM>>10);
 
     free(pTasksIdx);
     free(pTasksInfo);
+}
+
+float detectChipTemperature()
+{
+    temp_sensor_config_t cfg = TSENS_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(temp_sensor_set_config(cfg));
+
+    float fTemperChip;
+    ESP_ERROR_CHECK(temp_sensor_start());
+    ESP_ERROR_CHECK(temp_sensor_read_celsius(&fTemperChip));
+    ESP_ERROR_CHECK(temp_sensor_stop());
+
+    return fTemperChip;
 }

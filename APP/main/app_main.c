@@ -32,6 +32,7 @@ void ntp_start(void)
             ESP_LOGI(c_szTAG, "NTP Time: %s", szTm);
             break;
         }
+        u8x++;
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }

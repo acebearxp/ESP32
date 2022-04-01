@@ -108,7 +108,7 @@ static esp_err_t _init_timer(void)
         .arg = &s_data,
         .dispatch_method = ESP_TIMER_TASK,
         .name = c_szTAG,
-        .skip_unhandled_events = true
+        .skip_unhandled_events = false
     };
     return esp_timer_create(&timer_args, &s_data.hESPTimer);
 }

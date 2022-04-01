@@ -195,7 +195,7 @@ esp_err_t WiFi_STA_Init()
         .arg = &s_wifi_sta_data,
         .dispatch_method = ESP_TIMER_TASK,
         .name = "on_timer_waiting_for_ip",
-        .skip_unhandled_events = true
+        .skip_unhandled_events = false
     };
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &s_wifi_sta_data.hTimerWaitForIP));
 

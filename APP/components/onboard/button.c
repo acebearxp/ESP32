@@ -91,7 +91,7 @@ void init_onboard_btn(esp_event_loop_handle_t hEventLoop, bool bActiveBLE, char 
         .arg = &s_data,
         .dispatch_method = ESP_TIMER_TASK,
         .name = "onboard_button",
-        .skip_unhandled_events = true
+        .skip_unhandled_events = false
     };
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &s_data.hTimer));
 
