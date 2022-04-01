@@ -120,5 +120,6 @@ void start_udp_test(esp_event_loop_handle_t hEventLoop)
 
 void trigger_udp_send(void)
 {
-    esp_event_post_to(s_data.hEventLoop, UDP_TEST_EVENT, UDP_TEST_EVENT_TX, NULL, 0, 0);
+    if(s_data.hEventLoop)
+        esp_event_post_to(s_data.hEventLoop, UDP_TEST_EVENT, UDP_TEST_EVENT_TX, NULL, 0, 0);
 }
