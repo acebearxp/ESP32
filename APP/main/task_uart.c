@@ -62,14 +62,13 @@ static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pEvDa
                     size_t len = pEventUART->size;
                     while(len > 0){
                         len = uart_read_bytes(UART_NUM_0, pdata->buf, UART_RX_BUF_MAX-1, pdMS_TO_TICKS(100));
+                        // X12 Cmd
+                        process_x12_cmd(pdata->buf, len, pdata);
                         // rm mid 0
                         for(int i=0;i<len;i++){
                             if(pdata->buf[i] == 0) pdata->buf[i] = '.';
                         }
                         pdata->buf[len] = 0;
-
-                        // X12 Cmd
-                        process_x12_cmd(pdata->buf, len, pdata);
                         ESP_LOGI("UART", "%s", pdata->buf);
                         uart_get_buffered_data_len(UART_NUM_0, &len);
                     }
