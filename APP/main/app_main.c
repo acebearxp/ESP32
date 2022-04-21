@@ -11,6 +11,7 @@
 #include "blink.h"
 #include "task_tm.h"
 #include "task_uart.h"
+#include "task_i2c.h"
 #include "IrRC.h"
 
 static const char c_szTAG[] = "APP";
@@ -83,8 +84,9 @@ void task_start(void *pArgs)
     vTaskDelay(pdMS_TO_TICKS(3000));
     blink_auto();
 
-    // UART
-    start_uart(hEventLoop, on_ir_data);
+    // UART & I2C
+    // start_uart(hEventLoop, on_ir_data);
+    start_i2c(hEventLoop);
 
     // IrRC
     // IrRC_Init(hEventLoop, GPIO_NUM_4, RMT_CHANNEL_7, 15); // RMT_RX_7---GPIO_4
