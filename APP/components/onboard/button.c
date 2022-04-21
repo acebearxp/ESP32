@@ -4,13 +4,14 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 #include "BlueSetupWiFi.h"
-
+#include "extra.h"
 
 #define MAX_ACTIVE_SECONDS 30
 
 typedef enum _onboard_event{
+    ONBOARD_EVENT_BTN_LOG_TASKINFO,
     ONBOARD_EVENT_BTN_ACTIVE_BLE,
-    ONBOARD_EVENT_TICK
+    ONBOARD_EVENT_TICK,
 } onboard_event_t;
 
 ESP_EVENT_DEFINE_BASE(ONBOARD_EVENT);
@@ -19,6 +20,8 @@ typedef struct _onboard_data{
     esp_event_loop_handle_t hEventLoop;
     esp_event_handler_instance_t hOnEvent;
     esp_timer_handle_t hTimer;
+    esp_timer_handle_t hTimerSingleClicked;
+    uint8_t u8ClickCount;
     bool bActiveBLE;
     uint8_t u8CountDeactiveBLE;
 } onboard_data_t;
@@ -29,7 +32,17 @@ static onboard_data_t s_data;
 static void IRAM_ATTR gpio_isr_handler(void *pArgs)
 {
     onboard_data_t *pOnboardData = (onboard_data_t*)pArgs;
-    esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
+    
+    pOnboardData->u8ClickCount++;
+    if(pOnboardData->u8ClickCount < 2){
+        esp_timer_start_once(pOnboardData->hTimerSingleClicked, 500000); // half second
+    }
+    else{
+        // double clicked
+        pOnboardData->u8ClickCount = 0;
+        esp_timer_stop(pOnboardData->hTimerSingleClicked);
+        esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
+    }
 }
 
 static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pData)
@@ -38,6 +51,9 @@ static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pData
 
     switch (evid)
     {
+    case ONBOARD_EVENT_BTN_LOG_TASKINFO:
+        LogTasksInfo("APP", true);
+    break;
     case ONBOARD_EVENT_BTN_ACTIVE_BLE:
         pOnboardData->u8CountDeactiveBLE = MAX_ACTIVE_SECONDS;
         if(!pOnboardData->bActiveBLE){
@@ -68,6 +84,13 @@ static void on_timer(void *pArgs)
     esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_TICK, NULL, 0, 0);
 }
 
+static void on_timer_single_clicked(void *pArgs)
+{
+    onboard_data_t *pOnboardData = (onboard_data_t*)pArgs;
+    pOnboardData->u8ClickCount = 0;
+    esp_event_isr_post_to(pOnboardData->hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_LOG_TASKINFO, NULL, 0, 0);
+}
+
 void ir_btn_active_ble(void)
 {
     esp_event_post_to(s_data.hEventLoop, ONBOARD_EVENT, ONBOARD_EVENT_BTN_ACTIVE_BLE, NULL, 0, 0);
@@ -94,6 +117,10 @@ void init_onboard_btn(esp_event_loop_handle_t hEventLoop, bool bActiveBLE, char 
         .skip_unhandled_events = false
     };
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &s_data.hTimer));
+
+    timer_args.callback = on_timer_single_clicked;
+    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &s_data.hTimerSingleClicked));
+
 
     s_data.hEventLoop = hEventLoop;
     ESP_ERROR_CHECK(esp_event_handler_instance_register_with(
