@@ -56,7 +56,7 @@ static void on_event(void *pArgs, esp_event_base_t ev, int32_t evid, void *pEvDa
             pdata->u16Pos = 0;
         break;
         default:
-            ESP_LOGI("I2C", "event: %d", evid);
+            ESP_LOGI("I2C", "event: %d", (int)evid);
     }
 }
 

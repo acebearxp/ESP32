@@ -152,7 +152,7 @@ esp_err_t IrRC_Init(esp_event_loop_handle_t hEventLoop, gpio_num_t gpio, rmt_cha
 
     uint32_t u32Hz;
     rmt_get_counter_clock(chRx, &u32Hz);
-    ESP_LOGI(c_szTAG, "RMT %u in %uHz", chRx, u32Hz);
+    ESP_LOGI(c_szTAG, "RMT %u in %uHz", (unsigned int)chRx, (unsigned int)u32Hz);
 
     // rmt_rx
     ESP_ERROR_CHECK(rmt_get_ringbuf_handle(chRx, &pData->buf));

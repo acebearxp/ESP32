@@ -5,4 +5,4 @@ set(include)
 idf_component_register(
     SRCS src/BlinkStatus.c
     INCLUDE_DIRS include
-    PRIV_REQUIRES SK68xx)
+    PRIV_REQUIRES SK68xx driver esp_event esp_timer)

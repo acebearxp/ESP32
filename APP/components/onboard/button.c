@@ -127,7 +127,7 @@ void init_onboard_btn(esp_event_loop_handle_t hEventLoop, bool bActiveBLE, char 
         hEventLoop, ONBOARD_EVENT, ESP_EVENT_ANY_ID, on_event, &s_data, &s_data.hOnEvent));
 
     gpio_config_t gpio_boot_btn = {
-        .pin_bit_mask = GPIO_SEL_0,
+        .pin_bit_mask = 0x0001, // v4.4 is GPIO_SEL_0,
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,

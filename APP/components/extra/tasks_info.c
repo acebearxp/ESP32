@@ -2,7 +2,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_log.h>
-#include <driver/temp_sensor.h>
+#include <driver/temperature_sensor.h>
 
 static char state2char(eTaskState state)
 {
@@ -41,11 +41,11 @@ void LogTasksInfo(const char *szTAG, bool bTaskDetail)
 
         if(bTaskDetail){
             ESP_LOGI(szTAG, "Task#%-2u %-16s%4u%8u%8u%4c",
-                pInfo->xTaskNumber,
+                (unsigned int)pInfo->xTaskNumber,
                 pInfo->pcTaskName,
-                pInfo->uxCurrentPriority,
-                pInfo->usStackHighWaterMark,
-                uStackSize,
+                (unsigned int)pInfo->uxCurrentPriority,
+                (unsigned int)pInfo->usStackHighWaterMark,
+                (unsigned int)uStackSize,
                 state2char(pInfo->eCurrentState));
         }
     }
@@ -54,9 +54,9 @@ void LogTasksInfo(const char *szTAG, bool bTaskDetail)
     uint32_t u32FreeSizeSRAM = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     // not implemented yet in v4.x
     // float fTemper = detectChipTemperature();
-    ESP_LOGI(szTAG, "=== total %u tasks, total stack size %uk ===", u32Count, u32StackTotal>>10);
+    ESP_LOGI(szTAG, "=== total %u tasks, total stack size %uk ===", (unsigned int)u32Count, (unsigned int)(u32StackTotal>>10));
     ESP_LOGI(szTAG, "=== total free heap size %uk, internal free heap size %uk ===",
-        u32FreeSizeTotal>>10, u32FreeSizeSRAM>>10);
+        (unsigned int)u32FreeSizeTotal>>10, (unsigned int)u32FreeSizeSRAM>>10);
 
     free(pTasksIdx);
     free(pTasksInfo);
@@ -64,7 +64,7 @@ void LogTasksInfo(const char *szTAG, bool bTaskDetail)
 
 float detectChipTemperature()
 {
-    temp_sensor_config_t cfg = TSENS_CONFIG_DEFAULT();
+    /*temp_sensor_config_t cfg = TSENS_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(temp_sensor_set_config(cfg));
 
     float fTemperChip;
@@ -72,5 +72,6 @@ float detectChipTemperature()
     ESP_ERROR_CHECK(temp_sensor_read_celsius(&fTemperChip));
     ESP_ERROR_CHECK(temp_sensor_stop());
 
-    return fTemperChip;
+    return fTemperChip;*/
+    return 0.0f;
 }

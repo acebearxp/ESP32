@@ -79,7 +79,9 @@ esp_err_t BlueSetupWiFi_Init(bool bInitNvs)
     ESP_ERROR_CHECK(nvs_open(c_szTAG, NVS_READWRITE, &s_data.hNVS));
     BlueSetupWiFi_NVS_Read();
 
-    ESP_ERROR_CHECK(esp_nimble_hci_and_controller_init());
+    // https://docs.espressif.com/projects/esp-idf/zh_CN/v5.0/esp32s3/migration-guides/release-5.x/bluetooth-low-energy.html?highlight=esp_nimble_hci_and_controller_init
+    // Controller initialization, enable and HCI initialization calls have been moved to nimble_port_init. This function can be deleted directly.
+    // ESP_ERROR_CHECK(esp_nimble_hci_and_controller_init());
 
     // register 4 callbacks for ble host
     ble_hs_cfg.gatts_register_cb = on_ble_host_gatt_server;
@@ -97,7 +99,7 @@ esp_err_t BlueSetupWiFi_Deinit(bool bDeinitNvs)
 
     nvs_close(s_data.hNVS);
     s_data.hNVS = 0;
-    ESP_ERROR_CHECK(esp_nimble_hci_and_controller_deinit());
+    // ESP_ERROR_CHECK(esp_nimble_hci_and_controller_deinit());
 
     if(bDeinitNvs){
         ESP_ERROR_CHECK(nvs_flash_deinit());

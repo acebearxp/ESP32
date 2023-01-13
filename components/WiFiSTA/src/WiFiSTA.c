@@ -80,7 +80,7 @@ static void on_networking_event(void *pArg, esp_event_base_t ev, int32_t evid, v
                 ESP_LOGW(c_szTAG, "WiFi beacon timeout");
                 break;
             default:
-                ESP_LOGW(c_szTAG, "unprocessed wifi_event: %d", evid);
+                ESP_LOGW(c_szTAG, "unprocessed wifi_event: %d", (int)evid);
         }
     }
     else if(ev == IP_EVENT){
@@ -107,11 +107,11 @@ static void on_networking_event(void *pArg, esp_event_base_t ev, int32_t evid, v
                 }
                 break;
             default:
-            ESP_LOGW(c_szTAG, "unprocessed ip_event: %d", evid);
+            ESP_LOGW(c_szTAG, "unprocessed ip_event: %d", (int)evid);
         }
     }
     else{
-        ESP_LOGW(c_szTAG, "unexpected event %s %d", ev, evid);
+        ESP_LOGW(c_szTAG, "unexpected event %s %d", ev, (int)evid);
     }
 }
 

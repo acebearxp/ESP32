@@ -20,7 +20,7 @@ typedef struct _udp_test_data{
     int sock;
     struct sockaddr_in srcAddr;
     struct sockaddr_in destAddr;
-    esp_timer_handle_t hTimer;
+    // esp_timer_handle_t hTimer;
     esp_event_loop_handle_t hEventLoop;
     esp_event_handler_instance_t hOnEvent;
 } udp_task_data_t;
