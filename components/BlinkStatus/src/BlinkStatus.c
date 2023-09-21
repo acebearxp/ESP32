@@ -186,7 +186,7 @@ esp_err_t BlinkStatus_Init(esp_event_loop_handle_t hEventLoop)
 
     ESP_ERROR_CHECK(_init_timer());
 
-    s_data.hSK68xx = sk68xx_driver_install(CONFIG_BLINK_STATUS_DIN_GPIO, CONFIG_BLINK_STATUS_RMT_CH, 1);
+    s_data.hSK68xx = sk68xx_driver_install(CONFIG_BLINK_STATUS_DIN_GPIO, 1);
 
     return ESP_OK;
 }

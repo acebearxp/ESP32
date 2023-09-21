@@ -2,8 +2,9 @@
 #include <esp_log.h>
 
 typedef struct _SK68xx_block{
-    rmt_channel_t rmtTx;
-    rmt_item32_t rmt_sample[2];
+    rmt_channel_handle_t hRMT;
+    rmt_encoder_handle_t hEncoder;
+    struct _SK68xx_block *pNext;
     uint16_t u16Count;
     uint8_t dataGRB[0]; // dynamic extended
 } SK68xx_block_t;
@@ -12,75 +13,97 @@ static struct _SK68xx_data {
     uint16_t u16bit0[2];
     uint16_t u16bit1[2];
     uint16_t u16rst;
-    SK68xx_block_t *pBlock[RMT_CHANNEL_MAX/2]; // half of them are tx channels
+    SK68xx_block_t *pData;
 } s_data = {
         .u16bit0 = { CONFIG_SK68XX_T0HI_NANO_SECONDS, CONFIG_SK68XX_T0LO_NANO_SECONDS },
         .u16bit1 = { CONFIG_SK68XX_T1HI_NANO_SECONDS, CONFIG_SK68XX_T1LO_NANO_SECONDS },
-        .u16rst = CONFIG_SK68XX_TRST_NANO_SECONDS
+        .u16rst = CONFIG_SK68XX_TRST_NANO_SECONDS,
+        .pData = NULL
     };
 
-static void IRAM_ATTR _ws2812_rmt_adapter(const void *pGRBData, rmt_item32_t *pRMTData,
-                                         size_t u32RGBSize, size_t u32RMTSize,
-                                         size_t *u32RGBTotalRead, size_t *u32RMTTotalWritten)
+/*static SK68xx_block_t* _search(rmt_channel_handle_t hRMT)
 {
-    /*
-        RGBData is read from pGRBData byte by byte
-        convert to RMTData bits by bits
-    */
-    SK68xx_block_t *pBlock;
-    ESP_ERROR_CHECK(rmt_translator_get_context(u32RMTTotalWritten, (void**)(&pBlock)));
-
-    uint32_t u32RGBRead = 0, u32WrittenBits = 0;
-    uint8_t *pu8Src = (uint8_t*)pGRBData;
-    rmt_item32_t *pRMTDst = pRMTData;
-    while(u32RGBRead < u32RGBSize && u32WrittenBits < u32RMTSize){
-        for(uint8_t i = 0; i < 8; i++){
-            if((*pu8Src) & ( 1 << (7-i))){ // MSB first
-                pRMTDst->val = pBlock->rmt_sample[1].val;
-            }
-            else{
-                pRMTDst->val = pBlock->rmt_sample[0].val;
-            }
-            u32WrittenBits++;
-            pRMTDst++;
-        }
-        u32RGBRead++;
-        pu8Src++;
+    struct _SK68xx_block *pBlock = s_data.pData;
+    while(pBlock){
+        if(pBlock->hRMT == hRMT) break;
+        pBlock = pBlock->pNext;
     }
-    *u32RGBTotalRead = u32RGBRead;
-    *u32RMTTotalWritten = u32WrittenBits;
+    return pBlock;
+}*/
+
+static SK68xx_block_t* _create(uint16_t u16Count)
+{
+    SK68xx_block_t *pNew = malloc(sizeof(SK68xx_block_t) + 3*u16Count);
+    pNew->pNext = NULL;
+
+    if(s_data.pData == NULL){
+        s_data.pData = pNew;
+    }
+    else{
+        SK68xx_block_t *pBlock = s_data.pData;
+        while(pBlock->pNext) pBlock = pBlock->pNext;
+        pBlock->pNext = pNew;
+    }
+
+    return pNew;
 }
 
-SK68xx_handler_t sk68xx_driver_install(gpio_num_t gpio, rmt_channel_t rmtTx, uint16_t u16Count)
+static void _destroy(SK68xx_block_t *pBlock)
 {
-    assert(rmtTx < RMT_CHANNEL_MAX/2);
-    assert(s_data.pBlock[rmtTx] == NULL);
+    if(s_data.pData == pBlock){
+        s_data.pData = pBlock->pNext;
+    }
+    else{
+        SK68xx_block_t *pBefore = s_data.pData;
+        while(pBefore->pNext && pBefore->pNext != pBlock) pBefore = pBefore->pNext;
+        assert(pBefore->pNext == pBlock);
+        pBefore->pNext = pBlock->pNext;
+    }
 
-    rmt_config_t cfg = RMT_DEFAULT_CONFIG_TX(gpio, rmtTx);
-    cfg.clk_div = 2; // APB@80MHz -> 40MHz
+    free(pBlock);
+}
 
-    ESP_ERROR_CHECK(rmt_config(&cfg));
-    ESP_ERROR_CHECK(rmt_driver_install(rmtTx, 0, 0));
-
-    uint32_t u32Clk;
-    ESP_ERROR_CHECK(rmt_get_counter_clock(rmtTx, &u32Clk));
-    float fRatio = u32Clk / 1e9f;
-
-    SK68xx_block_t *pBlock = malloc(sizeof(SK68xx_block_t) + 3*u16Count);
-    pBlock->rmtTx = rmtTx;
-    pBlock->rmt_sample[0].duration0 = fRatio * s_data.u16bit0[0];
-    pBlock->rmt_sample[0].level0 = 1;
-    pBlock->rmt_sample[0].duration1 = fRatio * s_data.u16bit0[1];
-    pBlock->rmt_sample[0].level1 = 0;
-    pBlock->rmt_sample[1].duration0 = fRatio * s_data.u16bit1[0];
-    pBlock->rmt_sample[1].level0 = 1;
-    pBlock->rmt_sample[1].duration1 = fRatio * s_data.u16bit1[1];
-    pBlock->rmt_sample[1].level1 = 0;
+SK68xx_handler_t sk68xx_driver_install(gpio_num_t gpio, uint16_t u16Count)
+{
+    SK68xx_block_t *pBlock = _create(u16Count);
     pBlock->u16Count = u16Count;
-    s_data.pBlock[rmtTx] = pBlock;
-  
-    ESP_ERROR_CHECK(rmt_translator_init(rmtTx, _ws2812_rmt_adapter));
-    ESP_ERROR_CHECK(rmt_translator_set_context(rmtTx, pBlock));
+
+    const uint32_t u32Clk = 40*1000*1000; // 40MHz
+
+    rmt_tx_channel_config_t tx_cfg = {
+        .gpio_num = gpio,
+        .clk_src = RMT_CLK_SRC_APB, // APB@80MHz
+        .resolution_hz = u32Clk, // 40MHz
+        .mem_block_symbols = 64,
+        .trans_queue_depth = 4,
+        .flags = {
+            .invert_out = false,
+            .with_dma = true,
+            .io_loop_back = false,
+            .io_od_mode = false
+        }
+    };
+    ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_cfg, &pBlock->hRMT));
+
+    float fRatio = u32Clk / 1e9f;
+    rmt_bytes_encoder_config_t enc_cfg = {
+        .bit0 = {
+            .duration0 = fRatio * s_data.u16bit0[0],
+            .level0 = 1,
+            .duration1 = fRatio * s_data.u16bit0[1],
+            .level1 = 0,
+        },
+        .bit1 = {
+            .duration0 = fRatio * s_data.u16bit1[0],
+            .level0 = 1,
+            .duration1 = fRatio * s_data.u16bit1[1],
+            .level1 = 0,
+        },
+        .flags.msb_first = true,
+    };
+    ESP_ERROR_CHECK(rmt_new_bytes_encoder(&enc_cfg, &pBlock->hEncoder));
+
+    ESP_ERROR_CHECK(rmt_enable(pBlock->hRMT));
 
     return pBlock;
 }
@@ -88,10 +111,10 @@ SK68xx_handler_t sk68xx_driver_install(gpio_num_t gpio, rmt_channel_t rmtTx, uin
 void sk68xx_driver_uninstall(SK68xx_handler_t hSK68xx)
 {
     SK68xx_block_t *pBlock = hSK68xx;
-    rmt_channel_t rmtTx = pBlock->rmtTx;
-    ESP_ERROR_CHECK(rmt_driver_uninstall(rmtTx));
-    free(pBlock);
-    s_data.pBlock[rmtTx] = NULL;
+    ESP_ERROR_CHECK(rmt_disable(pBlock->hRMT));
+    ESP_ERROR_CHECK(rmt_del_encoder(pBlock->hEncoder));
+    ESP_ERROR_CHECK(rmt_del_channel(pBlock->hRMT));
+    _destroy(pBlock);
 }
 
 esp_err_t sk68xx_write(SK68xx_handler_t hSK68xx, uint8_t *pRGB, uint16_t u16SizeInBytes, uint16_t u16WaitMS)
@@ -105,7 +128,14 @@ esp_err_t sk68xx_write(SK68xx_handler_t hSK68xx, uint8_t *pRGB, uint16_t u16Size
         pBlock->dataGRB[i + 1] = pRGB[i + 0];
         pBlock->dataGRB[i + 2] = pRGB[i + 2];
     }
-
-    ESP_ERROR_CHECK(rmt_write_sample(pBlock->rmtTx, pBlock->dataGRB, u16SizeInBytes, false));
-    return rmt_wait_tx_done(pBlock->rmtTx, pdMS_TO_TICKS(u16WaitMS));
+    
+    rmt_transmit_config_t cfg = {
+        .loop_count = 0,
+        .flags = {
+            .eot_level = 0
+        }
+    };
+    ESP_ERROR_CHECK(rmt_transmit(pBlock->hRMT, pBlock->hEncoder, pBlock->dataGRB, u16SizeInBytes, &cfg));
+    ESP_ERROR_CHECK(rmt_tx_wait_all_done(pBlock->hRMT, u16WaitMS));
+    return ESP_OK;
 }

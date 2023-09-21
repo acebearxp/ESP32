@@ -1,19 +1,18 @@
 #pragma once
 #include <esp_err.h>
 #include <driver/gpio.h>
-#include <driver/rmt.h>
+#include <driver/rmt_tx.h>
 
 // SK68xx handler
 typedef void* SK68xx_handler_t;
 
 /** install the driver for sk68xx
  *  @param gpio the gpio which sk68xx LED connected
- *  @param rmtTx the rmt sending channel
  *  @param u16Count how many sk68xx chained together
  *  @return the driver handler
  *  @remark total 4 drivers can be installed at the same time, since there're 4 rmt sending channels in ESP32S3
  */
-SK68xx_handler_t sk68xx_driver_install(gpio_num_t gpio, rmt_channel_t rmtTx, uint16_t u16Count);
+SK68xx_handler_t sk68xx_driver_install(gpio_num_t gpio, uint16_t u16Count);
 
 /** uninstall the driver for sk68xx
  *  @param hSK68xx the driver handler

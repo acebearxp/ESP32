@@ -86,7 +86,7 @@ void task_start(void *pArgs)
 
     // UART & I2C
     // start_uart(hEventLoop, on_ir_data);
-    start_i2c(hEventLoop);
+    // start_i2c(hEventLoop);
 
     // IrRC
     // IrRC_Init(hEventLoop, GPIO_NUM_4, RMT_CHANNEL_7, 15); // RMT_RX_7---GPIO_4

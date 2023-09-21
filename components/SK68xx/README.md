@@ -15,12 +15,11 @@ Since ESP32S3 has 4 RMT Tx channels(0~4), this driver can be install 4 times for
 
 #define LED_GPIO    48
 #define LED_COUNT   1
-#define LED_RMT_TX  2
 
 void app_main(void)
 {
     SK68xx_handler_t hSK68xx =
-        sk68xx_driver_install(LED_GPIO, LED_RMT_TX, LED_COUNT);
+        sk68xx_driver_install(LED_GPIO, LED_COUNT);
 
     uint8_t colorRED[3]   = { 0x03, 0x03, 0x00 };
     uint8_t colorGREEN[3] = { 0x00, 0x03, 0x03 };
