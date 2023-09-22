@@ -21,10 +21,10 @@ void ntp_start(void)
     // NTP
     setenv("TZ", "GMT-8", 1);
     tzset();
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "2.cn.pool.ntp.org");
-    sntp_setservername(1, "pool.ntp.org");
-    sntp_init();
+    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "2.cn.pool.ntp.org");
+    esp_sntp_setservername(1, "pool.ntp.org");
+    esp_sntp_init();
 
     char szTm[64];
     uint8_t u8x = 0;
@@ -93,10 +93,10 @@ void task_start(void *pArgs)
     // IrRC_Set_OnData(4, on_ir_data, 0);
 
     nvs_start();
-    char szWiFi[512];
+    char szWiFi[512] = {0};
     init_onboard_btn(hEventLoop, false, szWiFi, 512);
 
-    if(szWiFi != NULL){
+    if(strlen(szWiFi) > 0){
         // WiFi Startup
         ESP_ERROR_CHECK(WiFi_STA_Init());
         ESP_ERROR_CHECK(WiFi_STA_SetConfig(szWiFi));

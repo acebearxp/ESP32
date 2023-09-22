@@ -11,7 +11,7 @@ ESP32的试验性项目.
 这些代码应该也适用于ESP32系列的其它芯片,但没有经过测试.
 
 ## 软件环境
-依赖于 `乐鑫物联网框架` [esp-idf framework](https://github.com/espressif/esp-idf). 当前使用的是v4.4版本.
+依赖于 `乐鑫物联网框架` [esp-idf framework](https://github.com/espressif/esp-idf). 当前使用的是v5.1.1版本.
 
 ## components
 + [SK68xx](./components/SK68xx) RGB-LED driver.  
