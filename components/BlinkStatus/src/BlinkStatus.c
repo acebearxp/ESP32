@@ -1,7 +1,8 @@
 #include "BlinkStatus.h"
 #include <esp_check.h>
 #include <esp_timer.h>
-#include <driver/timer.h>
+// #include <driver/timer.h>
+#include <driver/gptimer.h>
 #include <esp_log.h>
 #include "SK68xx.h"
 
@@ -22,14 +23,11 @@ static struct _blinking_data_struct{
     esp_timer_handle_t hESPTimer;
 #endif
 #ifdef CONFIG_BLINK_STATUS_TIMER_GPT
-    uint8_t u8GPTimMark; // bit1 for timer_group, bit0 for timer_idx
+    gptimer_handle_t hGPTimer;
 #endif
     uint8_t u8Mode;
     blinking_args_t blinking_mode[6];
 } s_data ={
-#ifdef CONFIG_BLINK_STATUS_TIMER_GPT
-    .u8GPTimMark = (CONFIG_BLINK_STATUS_TIMER_GPT_GROUP<<1)|CONFIG_BLINK_STATUS_TIMER_GPT_INDEX,
-#endif
     .blinking_mode = {
         { { 0x00,0x00,0x00, 0x00,0x00,0x00 }, { 0xff, 0x00 }, 0x00 },
         { { 0x03,0x00,0x00, 0x00,0x00,0x00 }, { 0xaa, 0x55 }, 0x05 }, // POWER_ON red flash rapidly
@@ -121,7 +119,7 @@ static esp_err_t _uninit_timer(void)
 #endif
 
 #ifdef CONFIG_BLINK_STATUS_TIMER_GPT
-static bool IRAM_ATTR on_isr_tim(void *pArgs)
+static bool IRAM_ATTR on_isr_tim(gptimer_handle_t hGPTimer, const gptimer_alarm_event_data_t *pevData, void *pArgs)
 {
     BaseType_t pxHigherPriorityTaskWoken;
     esp_event_isr_post_to(s_data.hEventLoop, BLINK_STATUS_EVENT, BLINK_STATUS_EVENT_TICK, NULL, 0, &pxHigherPriorityTaskWoken);
@@ -130,37 +128,44 @@ static bool IRAM_ATTR on_isr_tim(void *pArgs)
 
 static void _start_timer(uint8_t u8Freq)
 {
-    uint32_t u32Hz = (CONFIG_BLINK_STATUS_TIMER_GPT_CLK_SRC?40000000:80000000)/CONFIG_BLINK_STATUS_TIMER_GPT_DIVIDER;
-    timer_set_alarm_value(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, u32Hz/u8Freq);
-    timer_set_counter_value(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, 0);
-    timer_start(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX);
+    uint32_t u32Hz = 1000; // 1kHz
+    gptimer_alarm_config_t alarm_cfg = {
+        .alarm_count = u32Hz/u8Freq,
+        .reload_count = 0,
+        .flags.auto_reload_on_alarm = true
+    };
+    ESP_ERROR_CHECK(gptimer_set_alarm_action(s_data.hGPTimer, &alarm_cfg));
+    ESP_ERROR_CHECK(gptimer_set_raw_count(s_data.hGPTimer, 0));
+    ESP_ERROR_CHECK(gptimer_start(s_data.hGPTimer));
 }
 
 static void _stop_timer(void)
 {
-    timer_pause(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX);
+    ESP_ERROR_CHECK(gptimer_stop(s_data.hGPTimer));
 }
 
 static esp_err_t _init_timer(void)
 {
-    timer_config_t tim_cfg = {
-        .alarm_en = TIMER_ALARM_EN,
-        .counter_en = TIMER_PAUSE,
-        .intr_type = TIMER_INTR_LEVEL,
-        .counter_dir = TIMER_COUNT_UP,
-        .auto_reload = TIMER_AUTORELOAD_EN,
-        .divider = CONFIG_BLINK_STATUS_TIMER_GPT_DIVIDER, // default is 40000 -> 1kHz
-        .clk_src = CONFIG_BLINK_STATUS_TIMER_GPT_CLK_SRC // default is XTAL@40MHz
+    gptimer_config_t tim_cfg = {
+        .clk_src = CONFIG_BLINK_STATUS_TIMER_GPT_CLK_SRC,
+        .direction = GPTIMER_COUNT_UP,
+        .resolution_hz = 1000 // 1kHz
     };
-    ESP_ERROR_CHECK(timer_init(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, &tim_cfg));
-    ESP_ERROR_CHECK(timer_enable_intr(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX));
-    ESP_ERROR_CHECK(timer_isr_callback_add(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX, on_isr_tim, 0, 0));
+    ESP_ERROR_CHECK(gptimer_new_timer(&tim_cfg, &(s_data.hGPTimer)));
+
+    gptimer_event_callbacks_t cbs = {
+        .on_alarm = on_isr_tim
+    };
+    ESP_ERROR_CHECK(gptimer_register_event_callbacks(s_data.hGPTimer, &cbs, 0));
+    ESP_ERROR_CHECK(gptimer_enable(s_data.hGPTimer));
+
     return ESP_OK;
 }
 
 static esp_err_t _uninit_timer(void)
 {
-    return timer_deinit(CONFIG_BLINK_STATUS_TIMER_GPT_GROUP, CONFIG_BLINK_STATUS_TIMER_GPT_INDEX);
+    ESP_ERROR_CHECK(gptimer_disable(s_data.hGPTimer));
+    return gptimer_del_timer(s_data.hGPTimer);
 }
 #endif
 

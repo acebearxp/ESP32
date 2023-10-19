@@ -25,22 +25,6 @@ menu "BlinkStatus"
             bool "General Purpose Timer"
     endchoice
 
-    config BLINK_STATUS_TIMER_GPT_GROUP
-        int "The group of general purpose timer"
-        depends on BLINK_STATUS_TIMER_GPT
-        default 0
-        range 0 1
-        help
-            Which general purpose timer is used for blinking
-    
-    config BLINK_STATUS_TIMER_GPT_INDEX
-        int "The index of general purpose timer"
-        depends on BLINK_STATUS_TIMER_GPT
-        default 0
-        range 0 1
-        help
-            Which general purpose timer is used for blinking
-
     choice BLINK_STATUS_TIMER_GPT_CLK_SRC
         prompt "The clock source for general purpose timer"
         depends on BLINK_STATUS_TIMER_GPT
@@ -57,15 +41,7 @@ menu "BlinkStatus"
     config BLINK_STATUS_TIMER_GPT_CLK_SRC
         int
         depends on BLINK_STATUS_TIMER_GPT_CLK_SRC_APB || BLINK_STATUS_TIMER_GPT_CLK_SRC_XTAL
-        default 0 if BLINK_STATUS_TIMER_GPT_CLK_SRC_APB
-        default 1 if BLINK_STATUS_TIMER_GPT_CLK_SRC_XTAL
-
-    config BLINK_STATUS_TIMER_GPT_DIVIDER
-        int "The divider for general purpose timer"
-        depends on BLINK_STATUS_TIMER_GPT
-        range 2 65536
-        default 40000
-        help
-            Clock divider
+        default 4 if BLINK_STATUS_TIMER_GPT_CLK_SRC_APB
+        default 11 if BLINK_STATUS_TIMER_GPT_CLK_SRC_XTAL
     
 endmenu
