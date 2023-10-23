@@ -10,7 +10,7 @@ bit1 -2+1
 #include "sony.h"
 #include <esp_log.h>
 
-static bool decode(rmt_item32_t *pRMTData)
+static bool decode(rmt_symbol_word_t *pRMTData)
 {
     const uint16_t u16s = 600; // segment
     const uint16_t u16t = 100; // tolerance
@@ -22,18 +22,18 @@ static bool decode(rmt_item32_t *pRMTData)
         return false;
 }
 
-static uint8_t decode_range(rmt_item32_t *pRMTData, uint8_t u8s, uint8_t u8len)
+static uint8_t decode_range(rmt_symbol_word_t *pRMTData, uint8_t u8s, uint8_t u8len)
 {
     uint8_t u8value = 0;
     for(uint16_t i=u8s+u8len-1;i>=u8s;i--){
-        rmt_item32_t *pX = pRMTData+i;
+        rmt_symbol_word_t *pX = pRMTData+i;
         bool b1 = decode(pX);
         u8value = (u8value << 1) | b1;
     }
     return u8value;
 }
 
-bool is_sony_protocol(rmt_item32_t *pRMTData, size_t len)
+bool is_sony_protocol(rmt_symbol_word_t *pRMTData, size_t len)
 {
     const uint16_t u16s = 600; // segment
     const uint16_t u16t = 100; // tolerance
@@ -47,7 +47,7 @@ bool is_sony_protocol(rmt_item32_t *pRMTData, size_t len)
     return false;
 }
 
-bool sony_decode(rmt_item32_t *pRMTData, size_t len,
+bool sony_decode(rmt_symbol_word_t *pRMTData, size_t len,
                  uint8_t *pu8Code, uint8_t *pu8Dev, uint8_t *pu8Ext)
 {
     *pu8Code = 0, *pu8Dev = 0, *pu8Ext = 0;
