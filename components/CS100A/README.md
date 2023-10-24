@@ -14,8 +14,8 @@
 void app_main(void)
 {
     CS100A_Config_t cs100_cfg = {
-        .tx = { RMT_CHANNEL_0, GPIO_NUM_1 },
-        .rx = { RMT_CHANNEL_4, GPIO_NUM_2 }
+        .tx = GPIO_NUM_1,
+        .rx = GPIO_NUM_2
     };
     ESP_ERROR_CHECK(CS100A_Init(&cs100_cfg));
 
