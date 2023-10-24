@@ -224,13 +224,9 @@ void BlinkStatus_Set(BlinkStatus status)
     s_data.u8Mode = status;
 
     // need to reset timer
-    if(u8FreqLast != 0 && u8FreqLast != u8FreqNext){
-        _stop_timer();
-    }
-
-    // reset timer
-    if(u8FreqNext != 0){
-        _start_timer(u8FreqNext);
+    if(u8FreqLast != u8FreqNext){
+        if(u8FreqLast != 0) _stop_timer();
+        if(u8FreqNext != 0) _start_timer(u8FreqNext);
     }
 
     esp_event_post_to(s_data.hEventLoop, BLINK_STATUS_EVENT, BLINK_STATUS_EVENT_MODE_CHANGED, NULL, 0, 0);

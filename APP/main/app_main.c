@@ -89,8 +89,8 @@ void task_start(void *pArgs)
     // start_i2c(hEventLoop);
 
     // IrRC
-    IrRC_Init(hEventLoop, GPIO_NUM_4); // RMT_RX_7---GPIO_4
-    IrRC_Set_OnData(4, on_ir_data, 0);
+    IrRC_Init(hEventLoop, GPIO_NUM_4); // GPIO_4
+    IrRC_Set_OnData(GPIO_NUM_4, on_ir_data, 0);
 
     nvs_start();
     char szWiFi[512] = {0};
