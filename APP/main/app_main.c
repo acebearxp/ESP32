@@ -13,6 +13,7 @@
 #include "task_uart.h"
 #include "task_i2c.h"
 #include "IrRC.h"
+#include "motor.h"
 
 static const char c_szTAG[] = "APP";
 
@@ -51,6 +52,9 @@ void nvs_start(void)
 void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArgs)
 {
     ESP_LOGI(c_szTAG, "on_ir_data: %u => %u", u16Address, u8Code);
+
+    static MotorX4_handler_t s_hMotorX4 = NULL;
+
     if(u16Address == 3704){
         switch(u8Code){
         case 28:
@@ -64,11 +68,37 @@ void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArg
         case 8:
         {
             // 方向上键
+            if(!s_hMotorX4){
+                MotorX4_Config_t cfg = {
+                    .motorLeftFront.pinIN1 = GPIO_NUM_14
+                };
+                s_hMotorX4 = MotorX4_driver_install(&cfg);
+            }
+            break;
+        }
+        case 13:
+        {
+            // Right
+            if(s_hMotorX4){
+                MotorX4_inc(s_hMotorX4);
+            }
+            break;
+        }
+        case 16:
+        {
+            // Left
+            if(s_hMotorX4){
+                MotorX4_dec(s_hMotorX4);
+            }
             break;
         }
         case 20:
             // 方向下键
-            trigger_udp_send();
+            if(s_hMotorX4){
+                MotorX4_driver_uninstall(s_hMotorX4);
+                s_hMotorX4 = NULL;
+            }
+            // trigger_udp_send();
             break;
         default:
             break;
@@ -108,7 +138,7 @@ void task_start(void *pArgs)
         ESP_LOGI(c_szTAG, "IPv4 %d.%d.%d.%d", IP2STR(&info.ip));
 
         ntp_start();
-        start_udp_test(hEventLoop);
+        // start_udp_test(hEventLoop);
     }
 
     LogTasksInfo(c_szTAG, true);
