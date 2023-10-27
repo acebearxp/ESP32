@@ -138,8 +138,15 @@ void task_start(void *pArgs)
     // start_i2c(hEventLoop);
 
     // IrRC
-    IrRC_Init(hEventLoop, GPIO_NUM_4); // GPIO_4
-    IrRC_Set_OnData(GPIO_NUM_4, on_ir_data, 0);
+    gpio_config_t ir_config = {
+        .pin_bit_mask = BIT64(GPIO_NUM_4) | BIT64(GPIO_NUM_5),
+        .mode = GPIO_MODE_OUTPUT
+    };
+    ESP_ERROR_CHECK(gpio_config(&ir_config));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_5, 0)); // G
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_4, 1)); // V
+    IrRC_Init(hEventLoop, GPIO_NUM_6); // GPIO_6 DATA
+    IrRC_Set_OnData(GPIO_NUM_6, on_ir_data, 0);
 
     nvs_start();
     char szWiFi[512] = {0};
