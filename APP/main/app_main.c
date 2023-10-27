@@ -70,26 +70,45 @@ void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArg
             // 方向上键
             if(!s_hMotorX4){
                 MotorX4_Config_t cfg = {
-                    .motorLeftFront.pinIN1 = GPIO_NUM_14
+                    .motorLeftFront = {
+                        .pinVCC = GPIO_NUM_15,
+                        .pinSLEEP = GPIO_NUM_16,
+                        .pinIN1 = GPIO_NUM_17,
+                        .pinIN2 = GPIO_NUM_18
+                    },
+                    .motorLeftRear = {
+                        .pinVCC = GPIO_NUM_9,
+                        .pinSLEEP = GPIO_NUM_10,
+                        .pinIN1 = GPIO_NUM_11,
+                        .pinIN2 = GPIO_NUM_12
+                    },
+                    .motorRightFront = {
+                        .pinIN2 = GPIO_NUM_42,
+                        .pinIN1 = GPIO_NUM_41,
+                        .pinSLEEP = GPIO_NUM_40,
+                        .pinVCC = GPIO_NUM_39
+                    },
+                    .motorRightRear = {
+                        .pinIN2 = GPIO_NUM_38,
+                        .pinIN1 = GPIO_NUM_37,
+                        .pinSLEEP = GPIO_NUM_36,
+                        .pinVCC = GPIO_NUM_35
+                    }
                 };
                 s_hMotorX4 = MotorX4_driver_install(&cfg);
+                MotorX4_SwtichDrive(s_hMotorX4, DriveMode_FWD);
+                MotorX4_Drive(s_hMotorX4, 50);
             }
             break;
         }
         case 13:
         {
             // Right
-            if(s_hMotorX4){
-                MotorX4_inc(s_hMotorX4);
-            }
             break;
         }
         case 16:
         {
             // Left
-            if(s_hMotorX4){
-                MotorX4_dec(s_hMotorX4);
-            }
             break;
         }
         case 20:
