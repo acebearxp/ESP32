@@ -49,11 +49,44 @@ void nvs_start(void)
     ESP_LOGI(c_szTAG, "nvs initialized");
 }
 
+static MotorX4_handler_t s_hMotorX4 = NULL;
+
+void motorx4_start(void)
+{
+    MotorX4_Config_t cfg = {
+        .motorLeftFront = {
+            .pinVCC = GPIO_NUM_15,
+            .pinSLEEP = GPIO_NUM_16,
+            .pinIN1 = GPIO_NUM_17,
+            .pinIN2 = GPIO_NUM_18
+        },
+        .motorLeftRear = {
+            .pinVCC = GPIO_NUM_9,
+            .pinSLEEP = GPIO_NUM_10,
+            .pinIN1 = GPIO_NUM_11,
+            .pinIN2 = GPIO_NUM_12
+        },
+        .motorRightFront = {
+            .pinIN2 = GPIO_NUM_42,
+            .pinIN1 = GPIO_NUM_41,
+            .pinSLEEP = GPIO_NUM_40,
+            .pinVCC = GPIO_NUM_39
+        },
+        .motorRightRear = {
+            .pinIN2 = GPIO_NUM_38,
+            .pinIN1 = GPIO_NUM_37,
+            .pinSLEEP = GPIO_NUM_36,
+            .pinVCC = GPIO_NUM_35
+        }
+    };
+    
+    s_hMotorX4 = MotorX4_driver_install(&cfg);
+    MotorX4_SwtichDrive(s_hMotorX4, DriveMode_FWD);
+}
+
 void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArgs)
 {
     ESP_LOGI(c_szTAG, "on_ir_data: %u => %u", u16Address, u8Code);
-
-    static MotorX4_handler_t s_hMotorX4 = NULL;
 
     if(u16Address == 3704){
         switch(u8Code){
@@ -68,37 +101,6 @@ void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArg
         case 8:
         {
             // 方向上键
-            if(!s_hMotorX4){
-                MotorX4_Config_t cfg = {
-                    .motorLeftFront = {
-                        .pinVCC = GPIO_NUM_15,
-                        .pinSLEEP = GPIO_NUM_16,
-                        .pinIN1 = GPIO_NUM_17,
-                        .pinIN2 = GPIO_NUM_18
-                    },
-                    .motorLeftRear = {
-                        .pinVCC = GPIO_NUM_9,
-                        .pinSLEEP = GPIO_NUM_10,
-                        .pinIN1 = GPIO_NUM_11,
-                        .pinIN2 = GPIO_NUM_12
-                    },
-                    .motorRightFront = {
-                        .pinIN2 = GPIO_NUM_42,
-                        .pinIN1 = GPIO_NUM_41,
-                        .pinSLEEP = GPIO_NUM_40,
-                        .pinVCC = GPIO_NUM_39
-                    },
-                    .motorRightRear = {
-                        .pinIN2 = GPIO_NUM_38,
-                        .pinIN1 = GPIO_NUM_37,
-                        .pinSLEEP = GPIO_NUM_36,
-                        .pinVCC = GPIO_NUM_35
-                    }
-                };
-                s_hMotorX4 = MotorX4_driver_install(&cfg);
-                MotorX4_SwtichDrive(s_hMotorX4, DriveMode_FWD);
-                MotorX4_Drive(s_hMotorX4, 50);
-            }
             break;
         }
         case 13:
@@ -112,12 +114,42 @@ void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArg
             break;
         }
         case 20:
-            // 方向下键
-            if(s_hMotorX4){
-                MotorX4_driver_uninstall(s_hMotorX4);
-                s_hMotorX4 = NULL;
-            }
-            // trigger_udp_send();
+            break;
+        default:
+            break;
+        }
+    }
+    else if(u16Address == 1){
+        static int8_t n8speed = 0;
+        // SONY TV Remote Control
+        switch (u8Code)
+        {
+        case 116: // 方向上键
+            n8speed = 50;
+            MotorX4_Drive(s_hMotorX4, n8speed);
+            break;
+        case 117: // 方向下键
+            n8speed = -50;
+            MotorX4_Drive(s_hMotorX4, n8speed);
+            break;
+        case 101: // 中间键
+            MotorX4_Break(s_hMotorX4);
+            break;
+        case 51: // 方向右键
+            break;
+        case 52: // 方向左键
+            break;
+        case 18: // 音量+
+            n8speed += 10;
+            if(n8speed > 100) n8speed = 100;
+            MotorX4_Drive(s_hMotorX4, n8speed);
+            break;
+        case 19: // 音量-
+            n8speed -= 10;
+            if(n8speed < -100) n8speed = -100;
+            MotorX4_Drive(s_hMotorX4, n8speed);
+            break;
+        case 37: // 输入选择
             break;
         default:
             break;
@@ -151,6 +183,8 @@ void task_start(void *pArgs)
     nvs_start();
     char szWiFi[512] = {0};
     init_onboard_btn(hEventLoop, false, szWiFi, 512);
+
+    motorx4_start();
 
     if(strlen(szWiFi) > 0){
         // WiFi Startup
