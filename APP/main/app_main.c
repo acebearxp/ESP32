@@ -81,7 +81,8 @@ void motorx4_start(void)
     };
     
     s_hMotorX4 = MotorX4_driver_install(&cfg);
-    MotorX4_SwtichDrive(s_hMotorX4, DriveMode_FWD);
+    // 四个电机内置有减速齿轮,滑行很吃力,因此只能以4WD方式驱动
+    MotorX4_SwtichDrive(s_hMotorX4, DriveMode_4WD);
 }
 
 void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArgs)
@@ -125,11 +126,11 @@ void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArg
         switch (u8Code)
         {
         case 116: // 方向上键
-            n8speed = 50;
+            n8speed = 80;
             MotorX4_Drive(s_hMotorX4, n8speed);
             break;
         case 117: // 方向下键
-            n8speed = -50;
+            n8speed = -80;
             MotorX4_Drive(s_hMotorX4, n8speed);
             break;
         case 101: // 中间键
@@ -140,13 +141,17 @@ void on_ir_data(gpio_num_t gpio, uint16_t u16Address, uint8_t u8Code, void *pArg
         case 52: // 方向左键
             break;
         case 18: // 音量+
-            n8speed += 10;
+            n8speed += 3;
             if(n8speed > 100) n8speed = 100;
+            // 占空比太低,轮子不转,因此倒退时最低设定为80
+            if(n8speed < 0 && n8speed > -80) n8speed = -80;
             MotorX4_Drive(s_hMotorX4, n8speed);
             break;
         case 19: // 音量-
-            n8speed -= 10;
+            n8speed -= 3;
             if(n8speed < -100) n8speed = -100;
+            // 占空比太低,轮子不转,因此前进时最低设定为80
+            if(n8speed > 0 && n8speed < 80) n8speed = 80;
             MotorX4_Drive(s_hMotorX4, n8speed);
             break;
         case 37: // 输入选择
